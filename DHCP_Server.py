@@ -38,6 +38,10 @@ def cleanup_expired_leases():
     expired_ips = []
 
     for ip, expiry in ip_leases.items():
+        if expiry <= current_time:
+            expired_ips.append(ip)
+
+    for ip in expired_ips:
         client_id = ip_to_client.get(ip)
         print(f"Lease expired for IP {ip} (client_id: {client_id})")
         del ip_leases[ip]
@@ -73,16 +77,19 @@ def ip_available_for_client(requested_ip: str, client_id: int) -> bool:
 # יצירת הסוקט שיאזין לבקשות המבקשות לקבל IP
 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
     sock.bind((DHCP_IP,DHCP_PORT))
+    sock.settimeout(1.0)
     print(f"DHCP server listening on {DHCP_IP}:{DHCP_PORT}")
 
     while True:
         cleanup_expired_offers() # ביצוע ניקוי להצעות שפג תוקפן
         cleanup_expired_leases() # ביצוע ניקוי לכתובות שפג תוקפן והחזרתן למאגר
-        data, addr = sock.recvfrom(4096) # קבלת הבקשה
         try:
-            msg = decode(data) # המרת ההודעה מ-JSON
-        except Exception:
-            print(f"SERVER got invalid JSON from {addr}: {data!r}")
+            data, addr = sock.recvfrom(4096)
+            msg = decode(data)
+        except socket.timeout:
+            continue
+        except json.JSONDecodeError:
+            print(f"SERVER got invalid JSON: {data!r}")
             continue
 
         print(f"SERVER receive from {addr}: {msg}")
@@ -202,7 +209,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
                 "client_id": client_id,
                 "your_ip": requested_ip,
                 "subnet_mask": SUBNET_MASK,
-                "lease_seconds": 600
+                "lease_seconds": LEASE_TIME
             }
             sock.sendto(encode(reply), addr)
             print(f"SERVER sent to {addr}: {reply}")
