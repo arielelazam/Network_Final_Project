@@ -9,9 +9,9 @@ SUBNET_MASK = "255.255.255.0"
 OFFER_TIMEOUT = 10 # הזמן שנתמש בו בשביל הקצאות
 LEASE_TIME = 600 # הזמן המוקצה ללקוח לשימוש בכתובת IP (שניות)
 
-ip_to_client: Dict[str, int] = {} # מבנה הנתונים המחזיק במפתח כתובת IP כלשהי ובערך את ה-ID של הלקוח המשתמש בה
+ip_to_client: Dict[str, int] = {} # מבנה הנתונים המחזיק: מפתח = כתובת IP כלשהי, וערך = ה-ID של הלקוח המשתמש בה
 
-client_name_to_id: Dict[str, int] = {} # מבנה נתונים המחזיק במפתח את שם הלקוח (שאיתו הוא מזדהה) ובערך את ה-ID שהוא קיבל
+client_name_to_id: Dict[str, int] = {} # מבנה נתונים המחזיק: מפתח = שם הלקוח (שאיתו הוא מזדהה), וערך = ה-ID שהוא קיבל
 next_client_id = 1 # מונה לחלוקת מספרי ID
 
 pending_offers: Dict[int, tuple[str, float]] = {} # מבנה נתונים שיחזיק במפתח ID של משתמש ובערך יחזיק את ה-IP שהצענו לו ואת הזמן המוקצה לו
@@ -21,12 +21,12 @@ ip_leases: Dict[str, float] = {} # מבנה נתונים המחזיק במפתח
 # פונקציה המנקה הצעות שפג תוקפן
 def cleanup_expired_offers():
     current_time = time.time()
-    expired_client_ids = []
+    expired_client_ids = [] #רשימה המכילה את המשתמשים(id) שלא ענו בזמן
 
-    for cid, value in pending_offers.items():
-        offered_ip, exp = value
-        if exp <= current_time:
-            expired_client_ids.append(cid)
+    for cid, value in pending_offers.items(): # עובר על pending_offers
+        offered_ip, exp = value # מפריד בין ה ip לזמן(exp)
+        if exp <= current_time: # אם עבר הזמן
+            expired_client_ids.append(cid) # מוסיפים את ה id לרשימה
 
     # חייבים למחוק אחרי שסיימנו לעבור על המילון
     for cid in expired_client_ids:
@@ -37,8 +37,8 @@ def cleanup_expired_leases():
     current_time = time.time()
     expired_ips = []
 
-    for ip, expiry in ip_leases.items():
-        if expiry <= current_time:
+    for ip, exp in ip_leases.items():
+        if exp <= current_time:
             expired_ips.append(ip)
 
     for ip in expired_ips:
@@ -51,12 +51,10 @@ def cleanup_expired_leases():
 # פונקציה המנסה לשלוף ממאגר הכתובות כתובת פנויה
 def pick_free_ip():
     current_time = time.time()
-    reserved_ips = {ip for (ip, exp) in pending_offers.values() if exp > current_time}
+    reserved_ips = {ip for (ip, exp) in pending_offers.values() if exp > current_time} # שומר את כתובות ip שמוצעות ללקוחות אחרים
 
     for ip in POOL:
-        if ip in ip_to_client:
-            continue
-        if ip in reserved_ips:
+        if ip in ip_to_client or ip in reserved_ips: # אם הכתובת תפוסה -> נעבור הלאה
             continue
         return ip
     return None
@@ -69,7 +67,7 @@ def encode(msg: Dict[str,Any]) -> bytes:
 def decode(data: bytes) -> dict[str,Any]:
     return json.loads(data.decode("utf-8"))
 
-# פונקציה הבודקת האם כתובת IP מסויימת יכולה או לא יכולה להשתייך למשתמש המבקש אותה
+# פונקצית עזר הבודקת האם כתובת IP מסויימת יכולה או לא יכולה להשתייך למשתמש המבקש אותה
 def ip_available_for_client(requested_ip: str, client_id: int) -> bool:
     owner_id = ip_to_client.get(requested_ip)
     return owner_id is None or owner_id == client_id
@@ -127,14 +125,14 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
                 }
 
             sock.sendto(encode(reply), addr)
-            print(f"[SERVER] sent to {addr}: {reply}")
+            print(f"SERVER sent to {addr}: {reply}")
 
 
         elif msg.get("type") == "DHCP_REQUEST": # אם הלקוח מעוניין לקבל את הכתובת
             client_name = msg.get("client_name") # נשמור את שם הלקוח
             requested_ip = msg.get("requested_ip") # נשמור את כתובת ה-IP שהוא מעוניין לקבל
 
-            # אם הלקוח שלך שם לא תקין או לא שלח שם נחזיר הודעת שגיאה
+            # אם הלקוח שלח שם לא תקין או לא שלח שם נחזיר הודעת שגיאה
             if not isinstance(client_name, str) or not client_name:
                 reply = {"type": "DHCP_NAK", "reason": "MISSING_CLIENT_NAME"}
                 sock.sendto(encode(reply), addr)
@@ -165,7 +163,6 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
                 continue
 
             offer = pending_offers.get(client_id)
-
             # אם לא שוריינה ללקוח אף כתובת, נחזיר שגיאה
             if offer is None:
                 reply = {"type": "DHCP_NAK", "reason": "NO_PENDING_OFFER", "client_id": client_id}
@@ -174,7 +171,6 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
                 continue
 
             offered_ip, expiry_time = offer
-
             # אם הלקוח מעוניין בכתובת אבל פג הזמן, נחזיר שגיאה
             if time.time() > expiry_time:
                 del pending_offers[client_id]
