@@ -30,3 +30,4 @@ def start_dns_server():
             print(f"[DNS Server] Received query: '{domain_query}' from {client_address}")
 
 
+
