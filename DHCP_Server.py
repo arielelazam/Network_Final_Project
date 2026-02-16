@@ -214,4 +214,3 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             reply = {"type": "DHCP_NAK", "reason": "UNKNOWN_MESSAGE_TYPE"}
             sock.sendto(encode(reply), addr)
             print(f"SERVER sent to {addr}: {reply}")
-            # בדיקת שורות

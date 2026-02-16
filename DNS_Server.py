@@ -277,36 +277,6 @@ class DNSHandler(BaseHTTPRequestHandler):
         self._send_json(200, result)
         self.cache.display()
 
-    # [תאימות לאחור – UDP] כל הפונקציה הזו קיימת רק בשביל לקוחות ישנים
-    # שהיו שולחים JSON בגוף ההודעה (מהגרסה שעבדה על UDP).
-    def do_POST(self):
-        content_len = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(content_len).decode(ENCODING)
-
-        try:
-            msg = json.loads(body)
-        except json.JSONDecodeError:
-            self._send_json(400, {"Status": 2, "error": "INVALID_JSON"})
-            return
-
-        # [תאימות לאחור – UDP] הפורמט הישן: {"type":"DNS_QUERY","domain":"...","record_type":"A"}
-        # הפורמט החדש (תקני):                {"name":"...","type":"A"}
-        if msg.get("type") == "DNS_QUERY":  #  פורמט ישן (UDP)
-            domain = msg.get("domain", "").strip().lower()
-            record_type = msg.get("record_type", "A").strip().upper()
-        else:  # פורמט חדש (תקני)
-            domain = msg.get("name", "").strip().lower()
-            record_type = str(msg.get("type", "A")).strip().upper()
-
-        if not domain:
-            self._send_json(400, {"Status": 2, "error": "MISSING_DOMAIN"})
-            return
-
-        print(f"\n>> [POST] Query: {domain} ({record_type}) from {self.client_address}")
-
-        result = resolve_query(domain, record_type, self.cache)
-        self._send_json(200, result)
-        self.cache.display()
 
     #
     def _send_json(self, status_code: int, data: dict):                  
