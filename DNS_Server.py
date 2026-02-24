@@ -1,9 +1,13 @@
-import json, time, ssl, os, subprocess, threading
+import json, time, ssl, os, threading, datetime, ipaddress
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 from typing import Dict, List, Tuple, Any, Optional
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 
 SERVER_IP = "127.0.0.2"       # הכתובת שעליה השרת מאזין
@@ -26,7 +30,7 @@ LOCAL_RECORDS: Dict[str, List[Dict[str, Any]]] = {
     "mysite.local":  [{"type": "A", "value": "192.168.1.10"}],
     "server.local":  [{"type": "A", "value": "192.168.1.20"}],
     "db.local":      [{"type": "A", "value": "192.168.1.30"}],
-    "app.local":     [{"type": "A", "value": "192.168.1.40"}],
+    "app.local":     [{"type": "A", "value": "127.0.0.1"}],
 }
 
 # מיפוי סוגי רשומות DNS למספרים (לפי תקן RFC 1035)
@@ -39,17 +43,53 @@ def generate_self_signed_cert() -> bool:
         print("  SSL Using existing certificate files.") 
         return True
 
-    # אם הקבצים לא קיימים, יוצרים חדשים
+    # אם הקבצים לא קיימים, יוצרים חדשים באמצעות Python (ללא צורך ב-openssl חיצוני)
     print("  SSL - Generating self-signed certificate...") 
     try:
-        subprocess.run([ "openssl", "req", "-x509", "-newkey", "rsa:2048", "-keyout", KEY_FILE, "-out", CERT_FILE, "-days", "365", "-nodes", "-subj", f"/CN={SERVER_IP}" ], check=True, capture_output=True)
+        # יצירת מפתח פרטי RSA באורך 2048 ביט
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+        # הגדרת שם הנושא והמנפיק (זהים כי התעודה עצמית)
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, SERVER_IP),
+        ])
+
+        # בניית התעודה: תקפה ל-365 יום, כוללת את כתובת ה-IP כ-SAN
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(issuer)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.datetime.now(datetime.UTC))
+            .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
+            .add_extension(
+                x509.SubjectAlternativeName([
+                    x509.IPAddress(ipaddress.ip_address(SERVER_IP))
+                ]),
+                critical=False,
+            )
+            .sign(key, hashes.SHA256())
+        )
+
+        # שמירת המפתח הפרטי לקובץ (ללא הצפנה)
+        with open(KEY_FILE, "wb") as f:
+            f.write(key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption(),
+            ))
+
+        # שמירת התעודה לקובץ
+        with open(CERT_FILE, "wb") as f:
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
+
         print("  [SSL] Certificate generated successfully!")
         return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        print("  [!] openssl not found. Cannot generate SSL certificate.")
-        print(f"      Generate manually with:")
-        print(f'      openssl req -x509 -newkey rsa:2048 -keyout {KEY_FILE} -out {CERT_FILE} -days 365 -nodes -subj "/CN={SERVER_IP}"')
-        print(f"      Or install openssl: https://slproweb.com/products/Win32OpenSSL.html")
+
+    except Exception as e:
+        print(f"  [!] Failed to generate SSL certificate: {e}")
+        print(f"  [!] Make sure 'cryptography' is installed: pip install cryptography")
         return False
 
 
