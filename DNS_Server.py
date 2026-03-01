@@ -102,6 +102,7 @@ def resolve_domain(domain: str) -> tuple[Optional[str], Optional[str]]:
         if not isinstance(ttl, int) or ttl <= 0:
             ttl = CACHE_TTL
         dns_cache[domain] = (ip, time.time() + ttl)
+        return ip, "DoH"
 
     return None, None
 
