@@ -48,6 +48,10 @@ def cleanup_expired_leases():
         if ip in ip_to_client:
             del ip_to_client[ip]
 
+        names_to_remove = [name for name, cid in client_name_to_id.items() if cid == client_id]
+        for name in names_to_remove:
+            del client_name_to_id[name]
+
 # פונקציה המנסה לשלוף ממאגר הכתובות כתובת פנויה
 def pick_free_ip():
     current_time = time.time()
