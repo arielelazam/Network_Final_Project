@@ -1,6 +1,7 @@
 import socket
 import json
 import time
+
 # הגדרות כלליות לעבודה מול השרתים
 DHCP_IP = "127.0.0.1"
 DHCP_PORT = 6767
@@ -17,8 +18,6 @@ def encode_json(msg: dict) -> bytes:
 
 def decode_json(data: bytes) -> dict:
     return json.loads(data.decode(ENCODING))
-
-# פונקציות עבודה מול שרת ה-DHCP
 
 # פונקציית בקשת כתובת מה-DHCP
 def dhcp_get_ip():
@@ -74,8 +73,8 @@ def dhcp_get_ip():
                     print(f"The reason for the ERROR is : {ack.get('reason')}")
                 return None
 
-            my_ip = ack.get("your_ip")
-            lease_time_in_seconds = ack.get("lease_seconds")
+            my_ip = ack.get("your_ip") # נשמור את ה-IP שהוקצה לנו
+            lease_time_in_seconds = ack.get("lease_seconds") # נשמור את הזמן שיש לנו להשתמש בכתובת ה-IP שקיבלנו
 
             print(f"Client IP: {my_ip}, Time to use the IP: {lease_time_in_seconds} seconds\n")
 
@@ -90,12 +89,12 @@ def dhcp_get_ip():
             print(f"UNEXPECTED ERROR!!! Reason: {e}")
             return None
 
-# פונקציית כתובת מה-DNS
+# פונקציית קבלת כתובת מה-DNS
 def dns_resolve():
     print("Starting the process with DNS to resolve IP address\n") # נגדיר זמן לזריקת שגיאה אם מידע לא הגיע ותוקע את התוכנית
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock: # ניצור סוקט ממשפחת IPv4 ומסוג UDP
-        sock.settimeout(TIMEOUT)
+        sock.settimeout(TIMEOUT) # נגדיר זמן לזריקת שגיאה אם מידע לא הגיע ותוקע את התוכנית
 
         # נשלח ל-DNS את הדומיין שאנחנו רוצים לקבל את ה-IP שלו
         try:
