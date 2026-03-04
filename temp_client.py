@@ -9,7 +9,7 @@ CLIENT_NAME = "my_client"
 DNS_IP = "127.0.0.1"
 DNS_PORT = 9999
 ENCODING = "utf-8"
-MY_SITE_DOMAIN = "mysite.local"
+MY_SITE_DOMAIN = "ariel.ac.il"
 TIMEOUT = 5
 
 # פונקציות להמרת קוד ל-JSON ולהיפך

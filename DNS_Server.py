@@ -4,6 +4,7 @@ import time
 import urllib.request
 import urllib.error
 from typing import Dict, Optional
+import ssl
 
 DNS_IP = "127.0.0.1" # כתובת ה-IP של שרת ה-DNS
 DNS_PORT = 9999 # ה-PORT עליו שרת ה-DNS יעבוד
@@ -21,6 +22,13 @@ LOCAL_RECORDS = {
 # Cache פשוט: domain -> (ip, expiry_time)
 dns_cache: Dict[str, tuple[str, float]] = {} # מפתח = שם הדומיין, ערך = כתובת ה-IP וזמן התפוגה
 CACHE_TTL = 60  # TTL למשך 60 שניות
+
+# פונקציית עזר שתאפשר לנו לצאת "החוצה" לבקש כתובות IP
+def create_ssl_context():
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    return context
 
 # פונקציה למחיקת הכתובות שפג תוקפן מה-cache
 def cleanup_cache():
@@ -44,7 +52,9 @@ def query_doh(domain: str) -> tuple[Optional[str], Optional[int]]:
         request = urllib.request.Request(url) # ניצור את הבקשה עצמה אותה אנחנו הולכים לשלוח "החוצה"
         request.add_header("Accept", "application/dns-json") # נגדיר ב-header שאנחנו שרת DNS ונבקש את התשובה בפורמט JSON
 
-        with urllib.request.urlopen(request, timeout=5) as response: # נתחיל את התקשורת מול השרת החיצוני
+        ssl_context = create_ssl_context()
+
+        with urllib.request.urlopen(request, timeout=5, context= ssl_context) as response: # נתחיל את התקשורת מול השרת החיצוני
             data = json.loads(response.read().decode(ENCODING)) # נקלוט את המידע שהתקבל
 
         answers = data.get("Answer", []) # נקלוט את התשובות שהתקבלו מהמידע
@@ -119,7 +129,7 @@ def handle_request(data: bytes, addr) -> dict:
 
         ip, method = resolve_domain(domain) # אם נמצא שם הדומיין, ננסה לשלוף את כתובת ה-IP שלו ואת המקור ממנו שלפנו אותו
 
-    # אם הצלחנו לשלוף את כתובת ה-IP ואם לא מצאנו מחזיר הודעה
+    # אם הצלחנו לשלוף את כתובת ה-IP נחזיר ואם לא מצאנו נחזיר הודעה
         if ip:
             return {
                 "status": "success",
@@ -159,9 +169,9 @@ def main():
     sock.bind((DNS_IP, DNS_PORT)) # נגדיר לו את ה-IP וה-PORT שאליו יפנה לקוח שירצה ליצור קשר
 
     print("=" * 30)
-    print(f" DNS Server: {DNS_IP}:{DNS_PORT}")
-    print(f" Upstream:   Cloudflare DoH")
-    print(f" Default fallback TTL: {CACHE_TTL}s")
+    print(f"DNS Server: {DNS_IP}:{DNS_PORT}")
+    print(f"Upstream: Cloudflare DoH")
+    print(f"Default fallback TTL: {CACHE_TTL}s")
     print("=" * 30)
     print("\nWaiting for queries...\n")
 
