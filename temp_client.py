@@ -4,6 +4,7 @@ import time
 
 # הגדרות כלליות לעבודה מול השרתים
 DHCP_IP = "255.255.255.255"  # broadcast
+KNOWN_DHCP_SERVER_IP = None  # אחרי החיבור הראשוני נשמור פה את הכתובת של השרת
 DHCP_PORT = 6767
 CLIENT_NAME = "my_client"
 DNS_IP = "127.0.0.1"
@@ -55,6 +56,12 @@ def dhcp_get_ip():
 
                     # אם קיבלנו offer אפשר להתקדם
                     if candidate.get("type") == "DHCP_OFFER":
+
+                        # שמירת הכתובת IP של השרת DHCP
+                        global KNOWN_DHCP_SERVER_IP  # global - תפנה למשתמש מחוץ לפונקציה(הגדרנו אותו למעלה בקבועים)
+                        KNOWN_DHCP_SERVER_IP = addr[0]
+                        print(f"Learned DHCP server IP: {KNOWN_DHCP_SERVER_IP}")
+
                         offer = candidate
                         break
 
@@ -77,6 +84,7 @@ def dhcp_get_ip():
                 if client_id is None or not offered_ip:
                     print("Invalid DHCP OFFER - missing client_id/offered_ip")
                     continue
+
 
                 print(f"Client ID: {client_id},Offered IP: {offered_ip}, Subnet mask: {subnet_mask}, Time to take the offered IP: {offer_timeout} seconds\n")
 
@@ -103,7 +111,7 @@ def dhcp_get_ip():
                         print(f"Ignoring ACK for different client_id: {ack.get('client_id')}")  # 🔴 ADDED
                         continue
 
-                    break # הגיע ACK/NAK רלוונטי
+                    break  # הגיע ACK/NAK רלוונטי
 
                 if ack.get("type") != "DHCP_ACK":  # אם המידע שהתקבל הוא לא ACK נחזיר שגיאה ואת הסיבה שבגללה היא קרתה
                     print("Didn't receive DHCP ACK - ERROR!!!")
@@ -133,14 +141,76 @@ def dhcp_get_ip():
                 return None
 
 
+# פונקציית לחידוש IP קיים
+def dhcp_renew_ip(current_ip: str):
+    print("Starting DHCP lease renewal process\n")
+
+    # אם אנחנו לא יודעים את הכתובת של השרת - אי אפשר להעריך חוזה
+    if not KNOWN_DHCP_SERVER_IP:
+        print("No known DHCP server IP. Run initial DHCP flow first.")
+        return None
+
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.settimeout(TIMEOUT)
+
+        try:
+            renew_msg = {
+                "type": "DHCP_RENEW",
+                "client_name": CLIENT_NAME,
+                "current_ip": current_ip
+            }
+
+            print(f"Sending RENEW message to DHCP server {KNOWN_DHCP_SERVER_IP}\n")
+
+            sock.sendto(encode_json(renew_msg), (KNOWN_DHCP_SERVER_IP, DHCP_PORT))
+
+            data, addr = sock.recvfrom(1024)
+            renew_response = decode_json(data)
+
+            # אם לא קיבלנו ACK, החידוש נכשל
+            if renew_response.get("type") != "DHCP_ACK":
+                print("Didn't receive DHCP ACK for renew - ERROR!!!")
+                if renew_response.get("reason"):
+                    # אם השרת שלח reason, מדפיסים למה נכשל
+                    print(f"The reason for the ERROR is : {renew_response.get('reason')}")
+                return None
+
+            # ה- IP שהשרת החזיר לאחר החידוש
+            renewed_ip = renew_response.get("your_ip")
+            # והזמן החדש
+            renewed_lease = renew_response.get("lease_seconds")
+
+            if not renewed_ip:
+                print("Invalid DHCP ACK for renew - missing your_ip")
+                return None
+            # אם זה לא אותו IP שהיה לנו - מחזירים None
+            if renewed_ip != current_ip:
+                print(f"Renew returned different IP ({renewed_ip}) - expected {current_ip}")
+                return None
+
+            print(f"Renew success! IP: {renewed_ip}, New lease: {renewed_lease} seconds\n")
+
+            return renewed_ip
+
+        # אם לא התקבלה תשובה בזמן שהוגדר
+        except socket.timeout:
+            print("TIMEOUT ERROR during DHCP renew!!!")
+            return None
+        # טיפול בשגיאה לא צפויה
+        except Exception as e:
+            print(f"UNEXPECTED ERROR during DHCP renew!!! Reason: {e}")
+            return None
+
+
 # פונקציית קבלת כתובת מה-DNS
 def dns_resolve():
-    print("Starting the process with DNS to resolve IP address\n")  # נגדיר זמן לזריקת שגיאה אם מידע לא הגיע ותוקע את התוכנית
+    print(
+        "Starting the process with DNS to resolve IP address\n")  # נגדיר זמן לזריקת שגיאה אם מידע לא הגיע ותוקע את התוכנית
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:  # ניצור סוקט ממשפחת IPv4 ומסוג UDP
         sock.settimeout(TIMEOUT)  # נגדיר זמן לזריקת שגיאה אם מידע לא הגיע ותוקע את התוכנית
 
-        #עוד ניסיונות במקרה של איבוד חבילה (timeout/retry loop)
+        # עוד ניסיונות במקרה של איבוד חבילה (timeout/retry loop)
         for attempt in range(1, DNS_RETRIES + 1):
             # נשלח ל-DNS את הדומיין שאנחנו רוצים לקבל את ה-IP שלו
             try:
@@ -151,7 +221,8 @@ def dns_resolve():
                 data, addr = sock.recvfrom(1024)
                 response = decode_json(data)
 
-                if response.get("status") != "success":  # אם מסיבה כלשהי ה-DNS לא החזיר לנו את ה-IP המבוקש נחזיר הדועת שגיאה ואת הסיבה שגרמה לה לקרות
+                if response.get(
+                        "status") != "success":  # אם מסיבה כלשהי ה-DNS לא החזיר לנו את ה-IP המבוקש נחזיר הדועת שגיאה ואת הסיבה שגרמה לה לקרות
                     print(f"DNS is not responding - ERROR!!!")
                     if response.get("reason"):
                         print(f"The reason for the ERROR is : {response.get('reason')}")
@@ -171,13 +242,14 @@ def dns_resolve():
                         continue
                     return None
 
-                print(f"The IP of the requested domain {resolved_domain} is: {resolved_ip} and the method is: {resolved_method}\n")
+                print(
+                    f"The IP of the requested domain {resolved_domain} is: {resolved_ip} and the method is: {resolved_method}\n")
                 return resolved_ip
 
             # תפיסת שגיאות TIMEOUT או שגיאות אחרות לא צפויות
             except socket.timeout:
                 print(f"TIMEOUT ERROR on attempt {attempt}/{DNS_RETRIES}")
-                if attempt == DHCP_RETRIES:
+                if attempt == DNS_RETRIES:
                     return None
 
             except Exception as e:
@@ -188,14 +260,11 @@ def dns_resolve():
 def main():
     print("Temp client is running!")
 
-    my_ip = dhcp_get_ip()  # נפנה ל-DHCP לקבל IP
-
-    # אם לא הצלחנו לקבל כתובת IP מה-DHCP נחזיר הודעת שגיאה
+    # קבלת IP ראשונית
+    my_ip = dhcp_get_ip()
     if not my_ip:
         print("Failed to get IP from DHCP")
         return
-
-    time.sleep(1)
 
     app_ip = dns_resolve()  # נבקש מה-DNS את כתובת ה-IP של השרת מולו אנחנו רוצים לעבוד
 
@@ -206,7 +275,23 @@ def main():
 
     print("\nEverything worked successfully!\n")
     print(f"My IP: {my_ip}, App IP: {app_ip}\n")
-    print("Ready to connect to application!\n")
+
+    # הזמן שנבקש לחדש את ה- IP
+    time.sleep(540)
+
+    renewed_ip = dhcp_renew_ip(my_ip)
+
+    if renewed_ip:
+        my_ip = renewed_ip
+        print(f"Lease renewed successfully. Current IP: {my_ip}")
+    else:
+        # החידוש נכשל -> תהליך DHCP מלא מחדש
+        print("Renew failed. Restarting full DHCP process...")
+        my_ip = dhcp_get_ip()
+        if not my_ip:
+            print("Failed to reacquire IP after renew failure")
+            return
+        print(f"Reacquired IP: {my_ip}")
 
 
 if __name__ == "__main__":
