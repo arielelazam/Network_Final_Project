@@ -2,7 +2,7 @@ import json, socket,time
 from typing import Dict, Any
 
 # הגדרת ה-IP וה-PORT של שרת ה-DHCP
-DHCP_IP = "127.0.0.1"
+DHCP_IP = "0.0.0.0"
 DHCP_PORT = 6767
 POOL = [f"192.168.1.{i}" for i in range(50,150)] # מאגר כתובות IP ששרת ה-DHCP מחזיק
 SUBNET_MASK = "255.255.255.0"
@@ -170,7 +170,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             # אם לא שוריינה ללקוח אף כתובת, נחזיר שגיאה
             if offer is None:
                 reply = {"type": "DHCP_NAK", "reason": "NO_PENDING_OFFER", "client_id": client_id}
-                sock.sendto(encode(reply), addr)
+                sock.sendto(encode(reply),addr)
                 print(f"SERVER sent to {addr}: {reply}")
                 continue
 
