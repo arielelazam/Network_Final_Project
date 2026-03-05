@@ -1,0 +1,32 @@
+{
+  "movie1": {
+    "title": "movie_1",
+    "segments": 4,
+    "segment_duration_sec": 2,
+    "qualities": {
+      "LOW": 500,
+      "MEDIUM": 1500,
+      "HIGH": 3000
+    }
+  },
+  "movie2": {
+    "title": "movie_2",
+    "segments": 4,
+    "segment_duration_sec": 2,
+    "qualities": {
+      "LOW": 500,
+      "MEDIUM": 1500,
+      "HIGH": 3000
+    }
+  },
+  "movie3": {
+    "title": "movie_3",
+    "segments": 5,
+    "segment_duration_sec": 2,
+    "qualities": {
+      "LOW": 500,
+      "MEDIUM": 1500,
+      "HIGH": 3000
+    }
+  }
+}
