@@ -6,6 +6,7 @@ import urllib.error
 from typing import Dict, Optional
 import ssl
 
+
 DNS_IP = "127.0.0.1" # כתובת ה-IP של שרת ה-DNS
 DNS_PORT = 9999 # ה-PORT עליו שרת ה-DNS יעבוד
 ENCODING = "utf-8"

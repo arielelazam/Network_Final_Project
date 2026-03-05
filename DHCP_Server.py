@@ -2,7 +2,7 @@ import json, socket,time
 from typing import Dict, Any
 
 # הגדרת ה-IP וה-PORT של שרת ה-DHCP
-DHCP_IP = "127.0.0.1"
+DHCP_IP = "0.0.0.0"
 DHCP_PORT = 6767
 POOL = [f"192.168.1.{i}" for i in range(50,150)] # מאגר כתובות IP ששרת ה-DHCP מחזיק
 SUBNET_MASK = "255.255.255.0"
@@ -170,7 +170,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             # אם לא שוריינה ללקוח אף כתובת, נחזיר שגיאה
             if offer is None:
                 reply = {"type": "DHCP_NAK", "reason": "NO_PENDING_OFFER", "client_id": client_id}
-                sock.sendto(encode(reply), addr)
+                sock.sendto(encode(reply),addr)
                 print(f"SERVER sent to {addr}: {reply}")
                 continue
 
@@ -213,6 +213,67 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             }
             sock.sendto(encode(reply), addr)
             print(f"SERVER sent to {addr}: {reply}")
+
+        # הלקוח מבקש לחדש את הכתובת שכבר יש לו
+        elif msg.get("type") == "DHCP_RENEW":
+            client_name = msg.get("client_name")
+            current_ip = msg.get("current_ip")
+
+            # אם אין שם של לקוח או שזה לא תיקני, לא נאפשר חידוש
+            if not isinstance(client_name, str) or not client_name:
+                reply = {"type": "DHCP_NAK", "reason": "MISSING_CLIENT_NAME"}
+                sock.sendto(encode(reply), addr)
+                print(f"SERVER sent to {addr}: {reply}")
+                continue
+
+            #  אם השרת לא מכיר את שם הלקוח הזה, לא נאפשר חידוש
+            if client_name not in client_name_to_id:
+                reply = {"type": "DHCP_NAK", "reason": "UNKNOWN_CLIENT"}
+                sock.sendto(encode(reply), addr)
+                print(f"SERVER sent to {addr}: {reply}")
+                continue
+
+            # אם הלקוח לא שלח IP לחידוש
+            if not isinstance(current_ip, str) or not current_ip:
+                reply = {"type": "DHCP_NAK", "reason": "MISSING_CURRENT_IP"}
+                sock.sendto(encode(reply), addr)
+                print(f"SERVER sent to {addr}: {reply}")
+                continue
+
+            # ה- ID של שם הלקוח
+            client_id = client_name_to_id[client_name]
+
+            # ה- ID של ה- IP הנוכחי
+            owner_id = ip_to_client.get(current_ip)
+
+            #לוקחים את זמן פקיעת ה-lease הנוכחי של ה-IP
+            lease_exp = ip_leases.get(current_ip)
+
+            now = time.time()
+
+            # אם זה אותו בעלים וגם קיים זמן והוא לא פג - מאריכים לו את הזמן
+            if owner_id == client_id and lease_exp is not None and lease_exp > now:
+                ip_leases[current_ip] = now + LEASE_TIME
+
+                reply = {
+                    "type": "DHCP_ACK",
+                    "client_id": client_id,
+                    "your_ip": current_ip,
+                    "subnet_mask": SUBNET_MASK,
+                    "lease_seconds": LEASE_TIME,
+                    "renewed": True # דגל עזר שמסמן ללקוח שזה ACK של חידוש
+                }
+
+                sock.sendto(encode(reply), addr)
+                print(f"SERVER sent to {addr}: {reply}")
+                continue
+
+            # אם לא עמד בתנאי חידוש -> דוחים ודורשים תהליך DHCP מחדש
+            reply = {"type": "DHCP_NAK", "reason": "LEASE_EXPIRED_RESTART_DHCP"}
+            sock.sendto(encode(reply), addr)
+            print(f"SERVER sent to {addr}: {reply}")
+            continue
+
 
         else:
             reply = {"type": "DHCP_NAK", "reason": "UNKNOWN_MESSAGE_TYPE"}
