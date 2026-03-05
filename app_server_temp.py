@@ -56,7 +56,6 @@ def tcp_recv(sock):
 
     return json.loads(data.decode(ENCODING)) # נחזיר את מה שקראנו ארוז כקובץ JSON
 
-
 # פונקציית טיפול בבקשות לקוח מסוג TCP
 def handle_tcp_client(client_sock, addr, catalog):
     print(f"Client connected in TCP from address: {addr}\n")
@@ -163,6 +162,7 @@ def send_segment_reliable(sock, client_addr, movie_name, seg_num, quality):
         print(f"UDP Sending chunks {sent_chunks}-{batch_end - 1} (window={window})")
 
         success_count = 0  # כמה חתיכות מתוך המקבץ נשלחו בהצלחה
+        failed_at = None # נאתחל משתנה למצב של כישלון בשליחת חבילה שנדע מאיפה להמשיך פעם הבאה
 
         # שליחת החתיכות במקבץ
         for i in range(sent_chunks, batch_end): # נעבור על כל החתיכות במקבץ הנוכחי
@@ -174,6 +174,7 @@ def send_segment_reliable(sock, client_addr, movie_name, seg_num, quality):
             else: # אם לא התקבל Ack אחרי מספר נסיונות, נסיק שיש עומס ברשת
                 print(f"UDP Chunk {i} failed after retries")
                 print(f"UDP Congestion detected! Reducing window")
+                failed_at = i # נשמור את החתיכה שבה נכשלה השליחה
                 ssthresh = max(window // 2, 1)  # נחתוך את הסף בחצי על מנת למנוע עומס
                 window = 1  # נאתחל בחזרה את גודל החלון ל-1 בשביל להתחיל Slow Start מחדש
                 break # נעצור את הלולאה וננסה לשלוח מחדש שוב את המקבץ הנוכחי
@@ -187,12 +188,11 @@ def send_segment_reliable(sock, client_addr, movie_name, seg_num, quality):
                 window = min(window + 1, max_window)
                 print(f"UDP Congestion Avoidance: window → {window}")
 
-            sent_chunks = batch_end # נגדיר את תחילת הטווח הבא להיות סוף הטווח שסיימנו לשלוח כעת
-        # אחרת - כלומר מספר החבילות שנשלחו קטן מגדול המקבץ
+            sent_chunks = batch_end
         else:
-            print(f"UDP Algorithm Score Dropped! Resetting logic to pool.")
-            window = 1  # נחזיר את window בחזרה לגודל 1 בשביל להתחיל את שליחת המקבץ מחדש בצורה איטית יותר
-            ssthresh = 2  # הקטנת סף ה-Slow Start
+            if failed_at is not None:
+                sent_chunks = failed_at
+                print(f"UDP Resuming from chunk {failed_at}")
 
     print(f"UDP Transfer complete: {movie_name} seg={seg_num}")
     return True
