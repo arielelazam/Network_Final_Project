@@ -14,7 +14,7 @@ MEDIA_DIR = os.path.join(SCRIPT_DIR, "media") # הנתיב של תיקיית ה�
 CATALOG_FILE = os.path.join(MEDIA_DIR, "catalog.json") # הנתיב לקובץ ה-JSON בו מאוחסנים הסרטים
 
 # הגדרות UDP Reliable
-MAX_CHUNK_SIZE = 60000 # הגודל המקסימלי לכל פיסת מידע
+MAX_CHUNK_SIZE = 16000 # הגודל המקסימלי לכל פיסת מידע
 ACK_TIMEOUT = 1.0 # הזמן שנקצה לקבלת ACK
 MAX_RETRIES = 3  # מספר הניסיונות לשליחה חוזרת במידת הצורך
 
@@ -77,7 +77,7 @@ def handle_tcp_client(client_sock, addr, catalog):
                         "movies": catalog
                     }
                     tcp_send(client_sock, response)
-                    print(f"[TCP] Sent movie list to {addr}")
+                    print(f"Sent movie list to {addr} By TCP")
 
                 elif msg_type == "SELECT":  # אם סוג ההודעה היה SELECT
                     movie_name = msg.get("movie", "")  # נחלץ את שם הסרט שהוא ביקש
