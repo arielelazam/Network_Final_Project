@@ -363,7 +363,7 @@ def main():
             print("Invalid choice. Please choose 1 or 2.")
             choice = input("What would you want to do now? \n1. Download another movie.\n2. Exit.")
 
-        #  אם הוא בחר לסגור את התקשורת עם האפליקציה, נחזיר הודעה ונסגור
+        # אם הוא בחר לסגור את התקשורת עם האפליקציה, נחזיר הודעה ונסגור
         if choice == "2":
             print("GoodBye! -> Connection closed")
             break
