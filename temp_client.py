@@ -348,21 +348,22 @@ def main():
     print(f"My IP: {my_ip}, App IP: {app_ip}\n")
     print("Ready to connect to application!\n")
 
+    # לולאת הממשק של הלקוח מול האפליקציה
     while True:
-        result = connect_to_app(app_ip)
+        result = connect_to_app(app_ip) # נבצע את החיבור לשרת האפליקציה שיכלול את בחירת הסרט הראשונה שהלקוח רוצה להוריד
 
-        if result is None:
+        if result is None: # אם החיבור לשרת האפליקציה כשל, נדפיס הודעה ונסגור את ההתקשרות
             print("Failed to connect the application... Exiting")
             break
 
         print("\n" + "*"*60)
-        choice = input("What would you want to do now? \n1. Download another movie.\n2. Exit.")
+        choice = input("What would you want to do now? \n1. Download another movie.\n2. Exit.") # לאחר סיום ההורדה, נשאל את הלקוח מה הוא רוצה לעשות להמשך
 
-        while choice not in ["1", "2"]:
+        while choice not in ["1", "2"]: # אם הבחירה לא טובה, נבקש ממנו שוב
             print("Invalid choice. Please choose 1 or 2.")
             choice = input("What would you want to do now? \n1. Download another movie.\n2. Exit.")
 
-
+        # אם הוא בחר לסגור את התקשורת
         if choice == "2":
             print("GoodBye! -> Connection closed")
             break
