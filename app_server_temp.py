@@ -200,6 +200,11 @@ def send_segment_reliable(sock, client_addr, movie_name, seg_num, quality):
 # הפונקציה האחראית על שליחת כל חתיכת סגמנט והחזרת המידע האם היא נמסרה בהצלחה או לא
 def send_chunk_with_ack(sock, client_addr, chunk_num, data, is_last):
 
+    # במצב הנוכחי, sock הוא הסוקט שעובר כפרמטר במספר פונקציות וכרגע איפה שהגדרנו אותו ב-handle_udp שהוא מאזין לנצח לבקשות מלקוחות
+    # כעת, נרצה פה שהוא ימתין ל-ACK מהלקוח שנייה אחת בלבד ולכן גם נשנה בהמשך את ה-TimeOut שלו
+    # מיד לאחר קבלת ACK נהיה חייבים להחזיר לסוקט את ההגדרה שהוא מאזין לנצח לבקשות מלקוח כי אחרת נקבל TimeOut בכל שנייה
+    old_timeout = sock.gettimeout() # נשמור את ההגדרה המקורית של המתנת השרת (לנצח)
+
     # נבנה את החבילה המכילה את חתיכת הסגמנט וננסה לשלוח אותה לכל היותר כמספר הניסיונות שהקצנו
     for attempt in range(MAX_RETRIES):
         packet = {
@@ -209,7 +214,7 @@ def send_chunk_with_ack(sock, client_addr, chunk_num, data, is_last):
         }
 
         sock.sendto(json.dumps(packet).encode(ENCODING), client_addr) # נשלח את החתיכה ללקוח
-        sock.settimeout(ACK_TIMEOUT) # נמתין לקבלת ACK מהלקוח
+        sock.settimeout(ACK_TIMEOUT) # נגדיר TimeOut של שנייה אחת לקבל ACK מהלקוח
 
         try:
             ack_data, addr = sock.recvfrom(1024) # נקלוט את המידע שהתקבל מהלקוח ואת הכתובת שלו
@@ -217,12 +222,14 @@ def send_chunk_with_ack(sock, client_addr, chunk_num, data, is_last):
 
             if ack.get("type") == "ACK" and ack.get("seq") == chunk_num: # אם סוג המידע שהתקבל מהלקוח הוא ACK
                 print(f"Chunk {chunk_num} ACK received (attempt {attempt + 1})")
+                sock.settimeout(old_timeout) # אם אכן התקבל ACK כנדרש, נעדכן בחזרה את ה-TimeOut של הסוקט
                 return True
 
-        # טיפול בשגיאת TimeOut
+        # טיפול בשגיאת TimeOut אם לא הגיע ACK תוך שנייה ננסה שוב
         except socket.timeout:
             print(f"Chunk {chunk_num} timeout (attempt {attempt + 1}/{MAX_RETRIES})")
 
+    sock.settimeout(old_timeout) # נחזיר את הסוקט ל-TimeOut המקורי שלו
     return False # נכשל אחרי כל הניסיונות
 
 # פונקציית טיפול בבקשות לקוח מסוג UDP
@@ -240,7 +247,7 @@ def handle_udp(catalog):
             seg_num = request.get("segment", 0) # נשמור את הסגמנט המבוקש
             quality = request.get("quality", "MEDIUM") # נשמור את האיכות המבוקשת
 
-            print(f"\n[UDP] Request from {client_addr}:")
+            print(f"\nUDP Request from {client_addr}:")
             print(f"Movie={movie_name}, Segment={seg_num}, Quality={quality}")
 
             # שליחת הסגמנט (עם Reliability + Flow + Congestion)

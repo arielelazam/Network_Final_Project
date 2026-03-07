@@ -1,6 +1,7 @@
 import socket
 import json
 import time
+import os
 
 # הגדרות כלליות לעבודה מול השרתים
 DHCP_IP = "127.0.0.1"
@@ -182,9 +183,10 @@ def connect_to_app(app_ip):
             # נקלוט מהשתמש את מספר הסרט שהוא רוצה לקבל
             choice = input(f"Select from the list the movie you want (range: 1-{len(movies_to_select)}):\n")
 
+            # אם הקלט מהמשתמש היה לא תקין, נציע לו לבחור שוב מהרשימת הסרטים שהצענו לו לפני כן
             while not choice.isdigit() or int(choice) <= 0 or int(choice) > len(movies_to_select):
                 print("Invalid selection. Please try again.")
-                choice = input(f"Select from the list the movie you want (range: 1-{len(movies_to_select)}):\n")
+                choice = input(f"Select from the list above the movie you want (range: 1-{len(movies_to_select)}):\n")
 
             # "נסמן" את הסרט שהלקוח בחר
             choice_index = int(choice) - 1
@@ -267,6 +269,18 @@ def connect_to_app(app_ip):
                     segment_data = b"".join(ordered_chunks) # נשמור את המידע של הסגמנט בצורה מסודרת ובבתים
                     segment_size = len(segment_data) # נשמור את גודל הסגמנט בשביל שנדע להוריד/להעלות את איכות הסגמנט הבא
 
+                    downloads_dir = "network_project_downloads" # נגדיר את כתובת התיקייה אליה נרצה לשמור את ההורדה
+                    os.makedirs(downloads_dir, exist_ok=True) # ניצור את התיקייה אם היא לא קיימת
+                    movie_dir = os.path.join(downloads_dir, selected_movie)
+                    os.makedirs(movie_dir, exist_ok=True)
+                    file_name = f"seg_{segment:03d}_{current_quality}.mp4"
+                    file_path = os.path.join(movie_dir, file_name)
+
+                    with open(file_path, "wb") as file:
+                        file.write(segment_data)
+
+                    print("Saved successfully!")
+
                     # נחשב את ה-Throughput בשביל לדעת האם עלינו להוריד או להעלות את המירות בסגמנט הבא
                     if download_time > 0:
                         throughput = segment_size/download_time
@@ -334,7 +348,24 @@ def main():
     print(f"My IP: {my_ip}, App IP: {app_ip}\n")
     print("Ready to connect to application!\n")
 
-    connect_to_app(app_ip) # נפנה לשרת האפליקציה
+    while True:
+        result = connect_to_app(app_ip)
+
+        if result is None:
+            print("Failed to connect the application... Exiting")
+            break
+
+        print("\n" + "*"*60)
+        choice = input("What would you want to do now? \n1. Download another movie.\n2. Exit.")
+
+        while choice not in ["1", "2"]:
+            print("Invalid choice. Please choose 1 or 2.")
+            choice = input("What would you want to do now? \n1. Download another movie.\n2. Exit.")
+
+
+        if choice == "2":
+            print("GoodBye! -> Connection closed")
+            break
 
 if __name__ == "__main__":
     main()
