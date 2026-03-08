@@ -3,7 +3,7 @@ import json
 import subprocess
 
 # הגדרות כלליות
-SOURCE_DIR = "Movies"  # התיקייה עם הסרטונים המקוריים
+SOURCE_DIR = "movies"  # התיקייה עם הסרטונים המקוריים
 MEDIA_DIR = "media" # שם תיקיית היעד אליה נעביר את חתיכות הסרטונים שנוצרו
 ENCODING = "utf-8"
 SEGMENT_DURATION = 2  # כל סגמנט יהיה באורך של 2 שניות
@@ -47,7 +47,7 @@ def split_video_to_segments(input_path, output_dir, movie_name):
     if duration % SEGMENT_DURATION > 0.5:  # אם יש שארית גדולה מדי, כלומר יצא לנו בחישוב כמות סגמנטים שבפועל לא תכיל את כל הסרטון ותפספס חלק קטן ממנו, נוסיף עוד סגמנט
         num_segments += 1
 
-    print(f"Duration: {duration:.1f}s,  Segments: {num_segments} (every {SEGMENT_DURATION}s)\n")
+    print(f"Duration: {duration:.1f}s, Segments: {num_segments} (every {SEGMENT_DURATION}s)\n")
 
     # עבור הסרטון הנוכחי, ניצור כל סגמנט שלו בכל אחת משלושת האיכויות
     for quality_name, bitrate in QUALITIES.items():
@@ -97,7 +97,7 @@ def create_catalog_from_videos():
     video_files = [f for f in os.listdir(SOURCE_DIR) if f.lower().endswith('.mp4')] # אם מצאנו את התיקייה, נחלץ ממנה את כל קבצי ה-mp4
 
     if not video_files: # אם לא נמצאו קבצי mp4 נחזיר הודעה ללקוח ונסיים את התוכנית
-        print(f"No .mp4 files found in '{SOURCE_DIR}'")
+        print(f"No mp4 files found in '{SOURCE_DIR}'")
         return
 
     print(f"Found {len(video_files)} videos!")

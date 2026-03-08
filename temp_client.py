@@ -169,7 +169,7 @@ def connect_to_app(app_ip):
 
             # נציג למשתמש את רשימת הסרטים הזמינה לו
             movies_to_select = [] # נגדיר מערך עם שמות מייצגים של הסרטים שמהם יוכל המשתמש לבחור
-            print("Available Movies:")
+            print("Available movies:")
             movies_index = 1
             for movie_number, movie_info in list_response.get("movies", {}).items():
                 movies_to_select.append(movie_number) # נוסיף את השם המייצג של הסרט למערך הבחירות
@@ -177,7 +177,7 @@ def connect_to_app(app_ip):
                 movies_index += 1 # נוסיף מונה שבכל הדפסה של שם הסרט "יצמיד" לו מספר שיהיה ללקוח נוח לבחור
 
             if not movies_to_select: # אם התקבל קטלוג ריק נחזיר הודעה שאין סרטים זמינים
-                print("No Available Movies... Try later")
+                print("No Available movies... Try later")
                 return None
 
             # נקלוט מהשתמש את מספר הסרט שהוא רוצה לקבל
