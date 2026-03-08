@@ -1,211 +1,153 @@
-"""
-סקריפט הכנת מדיה לפרויקט DASH
-================================
-שלב 1: הרצת הסקריפט יוצרת את מבנה התיקיות
-שלב 2: שמים סרטונים מקוריים בתיקיית media/ (שם: movie1.mp4, movie2.mp4, ...)
-שלב 3: מריצים שוב - הסקריפט חותך לסגמנטים ב-3 איכויות
+import os
+import json
+import subprocess
 
-דרישות: FFmpeg מותקן (winget install ffmpeg)
-"""
+# הגדרות כלליות
+SOURCE_DIR = "movies"  # התיקייה עם הסרטונים המקוריים
+MEDIA_DIR = "media" # שם תיקיית היעד אליה נעביר את חתיכות הסרטונים שנוצרו
+ENCODING = "utf-8"
+SEGMENT_DURATION = 2  # כל סגמנט יהיה באורך של 2 שניות
 
-import os, json, subprocess, sys
-
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-MEDIA_DIR = os.path.join(SCRIPT_DIR, "media")
-DOWNLOADS_DIR = os.path.join(SCRIPT_DIR, "downloads")
-
-SEGMENT_DURATION = 3
-
+# הגדרות איכות לכל סגמנט, כלומר ה-bitrate שזה בצם כמה קילוביטים יעברו בכל שנייה
 QUALITIES = {
-    "HIGH":   {"scale": "1920:1080", "bitrate": "5M"},
-    "MEDIUM": {"scale": "640:360",   "bitrate": "1M"},
-    "LOW":    {"scale": "320:180",   "bitrate": "400k"},
+    "LOW": "500k",
+    "MEDIUM": "1500k",
+    "HIGH": "3000k"
 }
 
+# הפונקציה שאחראית לתת לנו את אורכו המלא הסרט
+def get_video_duration(video_path):
 
-def create_directories():
-    os.makedirs(MEDIA_DIR, exist_ok=True)
-    os.makedirs(DOWNLOADS_DIR, exist_ok=True)
-    print(f"[OK] media/     -> {MEDIA_DIR}")
-    print(f"[OK] downloads/ -> {DOWNLOADS_DIR}")
+    # נעזר ב-ffprobe על מנת לקבל את אורך הסרטון המבוקש
+    cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", video_path]
 
-
-def check_ffmpeg():
+    # נשתמש ב-subprocess.run בשביל להריץ את הפקודה בטרמינל דרך הפייתון וננסה לקבל את אורך הסרטון, אם הצלחנו נחזיר את אורכו ואם לא נדפיס הודעת שגיאה ונחזיר None
     try:
-        result = subprocess.run(
-            ["ffmpeg", "-version"],
-            capture_output=True, text=True
-        )
-        if result.returncode == 0:
-            first_line = result.stdout.split("\n")[0]
-            print(f"[OK] FFmpeg found: {first_line}")
-            return True
-    except FileNotFoundError:
-        pass
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True) # נקבל את התוצאה
+        duration = float(result.stdout.strip()) # ננקה ממנה אפסים מיותרים
+        return duration # נחזיר את אורך הסרטון
+    except Exception as e:
+        print(f"Error reading duration: {e}")
+        return None
 
-    print("[!] FFmpeg not found!")
-    print("    Install: winget install ffmpeg")
-    print("    Or download from: https://ffmpeg.org/download.html")
-    return False
+# הפונקציה האחראית לקבל סרטון ולחלק אותו לסגמנטים
+def split_video_to_segments(input_path, output_dir, movie_name):
 
+    print(f"{'=' * 60}\n")
+    print(f"Processing: {movie_name}")
+    print(f"{'=' * 60}\n")
 
-def find_source_videos():
-    """מחפש סרטונים מקוריים בתיקיית media/ (movie1.mp4, movie2.mp4, ...)"""
-    videos = []
-    for f in sorted(os.listdir(MEDIA_DIR)):
-        if f.endswith(".mp4") and not os.path.isdir(os.path.join(MEDIA_DIR, f)):
-            name = os.path.splitext(f)[0]
-            if not any(q in name for q in ["HIGH", "MEDIUM", "LOW"]):
-                videos.append(f)
-    return videos
+    os.makedirs(output_dir, exist_ok=True) # ניצור את התיקייה אליה הסגמנטים ישלחו
 
+    duration = get_video_duration(input_path) # נקבל את אורך הסרטון, אם לא התקבל אורך, נחזיר None
+    if duration is None:
+        return None
 
-def get_video_duration(filepath):
-    result = subprocess.run(
-        ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
-         "-of", "default=noprint_wrappers=1:nokey=1", filepath],
-        capture_output=True, text=True
-    )
-    try:
-        return float(result.stdout.strip())
-    except ValueError:
-        return 0
+    num_segments = int(duration / SEGMENT_DURATION) # נחשב לכמה סגמנטים עלינו לחלק את הסרטון בהתאם לאורכו
+    if duration % SEGMENT_DURATION > 0.5:  # אם יש שארית גדולה מדי, כלומר יצא לנו בחישוב כמות סגמנטים שבפועל לא תכיל את כל הסרטון ותפספס חלק קטן ממנו, נוסיף עוד סגמנט
+        num_segments += 1
 
+    print(f"Duration: {duration:.1f}s, Segments: {num_segments} (every {SEGMENT_DURATION}s)\n")
 
-def process_video(source_file):
-    movie_name = os.path.splitext(source_file)[0]
-    source_path = os.path.join(MEDIA_DIR, source_file)
-    movie_dir = os.path.join(MEDIA_DIR, movie_name)
+    # עבור הסרטון הנוכחי, ניצור כל סגמנט שלו בכל אחת משלושת האיכויות
+    for quality_name, bitrate in QUALITIES.items():
+        print(f"\nCreating {quality_name} quality ({bitrate})")
 
-    os.makedirs(movie_dir, exist_ok=True)
+        for seg_num in range(num_segments): # נעבור על כל הסגמנטים
+            start_time = seg_num * SEGMENT_DURATION # השנייה בסרטון בה הסגמנט הנוכחי מתחיל
+            output_file = os.path.join(output_dir, f"seg_{seg_num:03d}_{quality_name}.mp4") # נשמור את הסגמנט הנוכחי, באיכות הנוכחית בקובץ
 
-    duration = get_video_duration(source_path)
-    expected_segments = int(duration / SEGMENT_DURATION) + (1 if duration % SEGMENT_DURATION > 0 else 0)
-    print(f"\n{'='*50}")
-    print(f"  Processing: {source_file}")
-    print(f"  Duration: {duration:.1f}s -> ~{expected_segments} segments of {SEGMENT_DURATION}s")
-    print(f"{'='*50}")
+            # נשתמש ב-ffmpeg על מנת למצוא את הסגמנט הנוכחי, "לגזור" אותו מהסרטון, לעשות אותו באיכות הנדרשת ולשמור אותו כקובץ בתיקייה המתאימה
+            cmd = ["ffmpeg", "-y",
+                "-i", input_path,
+                "-ss", str(start_time),
+                "-t", str(SEGMENT_DURATION),
+                "-b:v", bitrate,
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-c:a", "aac",
+                "-b:a", "128k",
+                "-movflags", "+faststart",
+                output_file
+            ]
 
-    for quality, settings in QUALITIES.items():
-        print(f"\n  [{quality}] Converting to {settings['scale']} @ {settings['bitrate']}...")
+            try:
+                subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True) # הפעלת הפקודה דרך ה-cmd
+                size = os.path.getsize(output_file) # נשמור את גודל הקובץ שנוצר בבתים
+                print(f"seg_{seg_num:03d}_{quality_name}.mp4 ({size:,} bytes)") # במידה והכל צלח נדפיס הודעת הצלחה
 
-        temp_file = os.path.join(movie_dir, f"_temp_{quality}.mp4")
-        cmd_convert = [
-            "ffmpeg", "-y", "-i", source_path,
-            "-vf", f"scale={settings['scale']}",
-            "-b:v", settings["bitrate"],
-            "-an",
-            temp_file
-        ]
-        subprocess.run(cmd_convert, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e: # במידה ולא הצלחנו להריץ את הפקודה כראוי נדפיס הודעת שגיאה ונחזיר None
+                print(f"Failed to create seg_{seg_num:03d}_{quality_name}.mp4")
+                return None
 
-        print(f"  [{quality}] Splitting into {SEGMENT_DURATION}s segments...")
-        seg_pattern = os.path.join(movie_dir, f"seg_%03d_{quality}.mp4")
-        cmd_segment = [
-            "ffmpeg", "-y", "-i", temp_file,
-            "-c", "copy",
-            "-f", "segment",
-            "-segment_time", str(SEGMENT_DURATION),
-            "-reset_timestamps", "1",
-            seg_pattern
-        ]
-        subprocess.run(cmd_segment, capture_output=True, text=True)
-
-        os.remove(temp_file)
-
-        seg_count = len([f for f in os.listdir(movie_dir) if f.endswith(f"_{quality}.mp4")])
-        print(f"  [{quality}] Done! {seg_count} segments created.")
-
-    return movie_name, expected_segments
+    return num_segments # במידה והכל צלח כראוי, נחזיר את מספר הסגמנטים שהומרו בהצלחה לכל אחת מהאיכויות
 
 
-def build_catalog(processed_movies):
+def create_catalog_from_videos():
+
+    print("*" * 30)
+    print("Real Video Processing Script")
+    print("*" * 30 + "\n")
+
+    # אם התיקייה עם הסרטונים לא קיימת, התוכנית לא תוכל לרוץ ולכן נבקש מהלקוח ליצור אותה ולחזור לנסות שוב
+    if not os.path.exists(SOURCE_DIR):
+        print(f"Source directory {SOURCE_DIR} not found. Create it and try again")
+        return
+
+    video_files = [f for f in os.listdir(SOURCE_DIR) if f.lower().endswith('.mp4')] # אם מצאנו את התיקייה, נחלץ ממנה את כל קבצי ה-mp4
+
+    if not video_files: # אם לא נמצאו קבצי mp4 נחזיר הודעה ללקוח ונסיים את התוכנית
+        print(f"No mp4 files found in '{SOURCE_DIR}'")
+        return
+
+    print(f"Found {len(video_files)} videos!")
+
+    # ניצור את מבנה הנתונים שיהיה בעצם הקטלוג שלנו. key = שם הסרט, value = הפרטים עליו
     catalog = {}
-    for movie_name, seg_count in processed_movies:
-        movie_dir = os.path.join(MEDIA_DIR, movie_name)
 
-        actual_seg_count = 0
-        for f in os.listdir(movie_dir):
-            if f.endswith("_HIGH.mp4"):
-                actual_seg_count += 1
+    video_number = 1 # ניצור מזהה לכל סרטון
 
-        quality_info = {}
-        for quality in QUALITIES:
-            sizes = []
-            for f in sorted(os.listdir(movie_dir)):
-                if f.endswith(f"_{quality}.mp4"):
-                    size_kb = os.path.getsize(os.path.join(movie_dir, f)) / 1024
-                    sizes.append(size_kb)
+    print(f"Processing video number: {video_number}/{len(video_files)}")
 
-            avg_size = sum(sizes) / len(sizes) if sizes else 0
-            quality_info[quality] = {
-                "resolution": QUALITIES[quality]["scale"].replace(":", "x"),
-                "bitrate_kbps": int(QUALITIES[quality]["bitrate"].replace("M", "000").replace("k", "")),
-                "avg_segment_kb": round(avg_size, 1)
+    for video_file in video_files: # נעבור על כל הסרטונים בתיקייה
+        movie_number = f"movie{video_number}" # נשמור את השם המספרי של הסרטון הנוכחי
+        movie_title = os.path.splitext(video_file)[0] # נשמור את שם הסרטון
+        input_path = os.path.join(SOURCE_DIR, video_file) # הנתיב לסרטון הנוכחי
+        output_dir = os.path.join(MEDIA_DIR, movie_number) # התיקייה בה ישמרו הסגמנטים של הסרטון הנוכחי
+        num_segments = split_video_to_segments(input_path, output_dir, movie_title) # נחלק את הסרטון לסגמנטים
+
+        # אם בוצעה חלוקה של הסרטון לסגמנטים, נוסיף לקטלוג את שמו המספרי של הסרטון כ-key ואת הפרטים כ-value
+        if num_segments:
+            catalog[movie_number] = {
+                "title": movie_title,
+                "segments": num_segments,
+                "segment_duration_sec": SEGMENT_DURATION,
+                "qualities": {
+                    "LOW": 500,
+                    "MEDIUM": 1500,
+                    "HIGH": 3000
+                }
             }
 
-        catalog[movie_name] = {
-            "title": movie_name.replace("_", " ").title(),
-            "segments": actual_seg_count,
-            "segment_duration_sec": SEGMENT_DURATION,
-            "total_duration_sec": actual_seg_count * SEGMENT_DURATION,
-            "qualities": quality_info
-        }
+        video_number += 1
 
-    catalog_path = os.path.join(MEDIA_DIR, "catalog.json")
-    with open(catalog_path, "w", encoding="utf-8") as f:
-        json.dump(catalog, f, indent=4, ensure_ascii=False)
+    if catalog: # אם הקטלוג לא ריק וכן יש בו סרטונים מפוצלים
+        catalog_path = os.path.join(MEDIA_DIR, "catalog.json") # ניצור את הנתיב לקטלוג שיצרנו
+        with open(catalog_path, "w", encoding=ENCODING) as catalog_file: # ניצור/נדרוס את הקובץ של הקטלוג
+            json.dump(catalog, catalog_file, indent=2, ensure_ascii=False) # נייצג את הקטלוג בפורמט JSON ובצורה קריאה
 
-    print(f"\n[OK] Catalog saved to: {catalog_path}")
-    return catalog
+        print(f"Catalog saved in path: {catalog_path}. Total movies in catalog: {len(catalog)}")
 
-
-def print_summary(catalog):
-    print(f"\n{'='*60}")
-    print("  SUMMARY")
-    print(f"{'='*60}")
-    for name, info in catalog.items():
-        print(f"\n  {info['title']} ({name}/)")
-        print(f"    Segments: {info['segments']} x {info['segment_duration_sec']}s = {info['total_duration_sec']}s total")
-        for q, qinfo in info["qualities"].items():
-            print(f"    {q:8s} {qinfo['resolution']:>10s}  avg: {qinfo['avg_segment_kb']:>8.1f} KB/segment")
-    print(f"\n{'='*60}")
-
-
-def main():
-    print("="*60)
-    print("  DASH Media Preparation Tool")
-    print("="*60)
-
-    create_directories()
-
-    if not check_ffmpeg():
-        print("\n[!] Install FFmpeg and run again.")
-        return
-
-    videos = find_source_videos()
-
-    if not videos:
-        print(f"\n[!] No source videos found in: {MEDIA_DIR}")
-        print(f"    Put your videos there as: movie1.mp4, movie2.mp4, ...")
-        print(f"    Then run this script again.")
-        print(f"\n    Where to get free videos:")
-        print(f"      https://www.pexels.com/videos/")
-        print(f"      https://pixabay.com/videos/")
-        return
-
-    print(f"\n[OK] Found {len(videos)} source video(s): {', '.join(videos)}")
-
-    processed = []
-    for video in videos:
-        movie_name, seg_count = process_video(video)
-        processed.append((movie_name, seg_count))
-
-    catalog = build_catalog(processed)
-    print_summary(catalog)
-
-    print("\n[DONE] Media is ready! You can now run app_server.py")
-
+    else:
+        print("No videos were processed successfully") # אם הקטלוג ריק נחזיר הודעה
 
 if __name__ == "__main__":
-    main()
+    try:
+        create_catalog_from_videos()
+        print("Catalog file created successfully!")
+
+    # טיפול בשגיאות
+    except KeyboardInterrupt:
+        print("Cancelled by user")
+    except Exception as e:
+        print(f"Error: {e}")
