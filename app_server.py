@@ -11,7 +11,7 @@ TCP_PORT = 9000 # ה-PORT עליו שרת האפליקציה יאזין לבקש
 UDP_PORT = 9001 # ה-PORT עליו שרת האפליקציה יאזין לבקשות UDP
 ENCODING = "utf-8"
 SIMULATE_NETWORK = True # נגדיר "מפסק" למצב שידמה שינויים במצבי הרשת
-PACKET_LOSS_RATE = 0.15 # נרצה שכ-15% מהחבילות "יאבדו" בשביל לדמות מצבי איבוד חבילות
+PACKET_LOSS_RATE = 0.08 # נרצה שכ-15% מהחבילות "יאבדו" בשביל לדמות מצבי איבוד חבילות
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # הנתיב של תיקיית ה-script הנוכחי
 MEDIA_DIR = os.path.join(SCRIPT_DIR, "media") # הנתיב של תיקיית המדיה
@@ -19,7 +19,7 @@ CATALOG_FILE = os.path.join(MEDIA_DIR, "catalog.json") # הנתיב לקובץ �
 
 # הגדרות UDP Reliable
 MAX_CHUNK_SIZE = 16000 # הגודל המקסימלי לכל פיסת מידע
-ACK_TIMEOUT = 0.3 # הזמן שנקצה לקבלת ACK
+ACK_TIMEOUT = 1.0 # הזמן שנקצה לקבלת ACK
 MAX_RETRIES = 3  # מספר הניסיונות לשליחה חוזרת במידת הצורך
 
 # פונקציית טעינת הקטלוג
@@ -224,12 +224,12 @@ def send_chunk_with_ack(sock, client_addr, chunk_num, data, is_last):
             continue
 
         rand = random.random() # נגריל מספר רנדומלי שיהיה בעצם הדילאיי שייקח לחבילה לצאת
-        if rand < 0.8:  # ב-80% מהזמן נרצה לדמות דילאיי קטן
+        if rand < 0.85:  # ב-85% מהזמן נרצה לדמות דילאיי קטן
             delay = 0.001
-        elif rand < 0.9:  # ב-10% מהמקרים נרצה לדמות דילאיי בינוני
-            delay = 0.015
-        else:  # ב-10% מהמקרים נרצה לדמות דילאיי גדול
-            delay = 0.05
+        elif rand < 0.95:  # ב-10% מהמקרים נרצה לדמות דילאיי בינוני
+            delay = 0.01
+        else:  # ב-5% מהמקרים נרצה לדמות דילאיי גדול
+            delay = 0.03
 
         time.sleep(delay)
         sock.sendto(json.dumps(packet).encode(ENCODING), client_addr) # נשלח את החתיכה ללקוח
