@@ -222,11 +222,11 @@ def connect_to_app(app_ip):
 
         downloading_segments = 0 # ניצור מונה שיספור כמה סגמנטים הורדנו
         current_quality = "MEDIUM" # נשמור את האיכות המבוקשת וכברירת מחדל נאתחל אותה ל-MEDIUM
-        HIGH_TRESHOLD = 200000 # נגדיר סף להעלאת רמה
-        LOW_TRESHOLD = 50000 # נגדיר סף להורדת רמה
+        HIGH_TRESHOLD = 800000 # נגדיר סף להעלאת רמה
+        LOW_TRESHOLD = 500000 # נגדיר סף להורדת רמה
 
         for segment in range(total_number_of_segments):
-            print(f"Segment number: {segment + 1}/{total_number_of_segments}. Requested Quality: {current_quality}\n")
+            print(f"Segment number: {segment + 1}/{total_number_of_segments}. Downloaing in {current_quality} Quality: \n")
 
             start_time = time.time() # נשמור את הזמן התחלת ההורדה
 

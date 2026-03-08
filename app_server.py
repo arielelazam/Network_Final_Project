@@ -2,12 +2,16 @@ import socket
 import json
 import os
 import threading
+import random
+import time
 
 # הגדרות כלליות של שרת האפליקציה
 SERVER_IP = "127.0.0.1" # כתובת ה-IP של האפליקציה
 TCP_PORT = 9000 # ה-PORT עליו שרת האפליקציה יאזין לבקשת TCP
 UDP_PORT = 9001 # ה-PORT עליו שרת האפליקציה יאזין לבקשות UDP
 ENCODING = "utf-8"
+SIMULATE_NETWORK = True # נגדיר "מפסק" למצב שידמה שינויים במצבי הרשת
+PACKET_LOSS_RATE = 0.15 # נרצה שכ-15% מהחבילות "יאבדו" בשביל לדמות מצבי איבוד חבילות
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # הנתיב של תיקיית ה-script הנוכחי
 MEDIA_DIR = os.path.join(SCRIPT_DIR, "media") # הנתיב של תיקיית המדיה
@@ -15,7 +19,7 @@ CATALOG_FILE = os.path.join(MEDIA_DIR, "catalog.json") # הנתיב לקובץ �
 
 # הגדרות UDP Reliable
 MAX_CHUNK_SIZE = 16000 # הגודל המקסימלי לכל פיסת מידע
-ACK_TIMEOUT = 1.0 # הזמן שנקצה לקבלת ACK
+ACK_TIMEOUT = 0.3 # הזמן שנקצה לקבלת ACK
 MAX_RETRIES = 3  # מספר הניסיונות לשליחה חוזרת במידת הצורך
 
 # פונקציית טעינת הקטלוג
@@ -213,6 +217,21 @@ def send_chunk_with_ack(sock, client_addr, chunk_num, data, is_last):
             "last": is_last  # האם זו החתיכה האחרונה
         }
 
+        # אם אנחנו במצב המדמה שינויים ברשת וזהו ניסיון השליחה הראשון ובנוסף זה בתוך ה-15% שנרצה שחבילה תלך לאיבוד
+        if SIMULATE_NETWORK and attempt == 0 and random.random() < PACKET_LOSS_RATE:
+            print(f"Packet number {chunk_num} lost...")
+            time.sleep(ACK_TIMEOUT) # ניזום את העיכוב של ה-ACK בכוונה
+            continue
+
+        rand = random.random() # נגריל מספר רנדומלי שיהיה בעצם הדילאיי שייקח לחבילה לצאת
+        if rand < 0.8:  # ב-80% מהזמן נרצה לדמות דילאיי קטן
+            delay = 0.001
+        elif rand < 0.9:  # ב-10% מהמקרים נרצה לדמות דילאיי בינוני
+            delay = 0.015
+        else:  # ב-10% מהמקרים נרצה לדמות דילאיי גדול
+            delay = 0.05
+
+        time.sleep(delay)
         sock.sendto(json.dumps(packet).encode(ENCODING), client_addr) # נשלח את החתיכה ללקוח
         sock.settimeout(ACK_TIMEOUT) # נגדיר TimeOut של שנייה אחת לקבל ACK מהלקוח
 
