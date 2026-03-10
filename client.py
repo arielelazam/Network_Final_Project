@@ -1,5 +1,5 @@
 import socket, json, time, os, ipaddress
-
+from random import choice
 
 # הגדרות כלליות לעבודה מול השרתים
 DHCP_IP = "255.255.255.255"  # broadcast
@@ -528,16 +528,39 @@ def main():
 
         # לוגיקת הניתוב
 
-        if user_domain.lower() == "app.local":  # אם המשתמש ביקש את כתובת שרת האפליקציה מפנים אותו אליה
-            print("Redirecting to application server...\n")
+        if user_domain != "app.local":  # אם המשתמש ביקש את כתובת שרת האפליקציה מפנים אותו אליה
+            print(f"General DNS query result: {user_domain} -> {resolved_ip}\n")
+            continue
+        # כניסה לשרת הסרטים
+        while True:
             result = connect_to_app(resolved_ip)
-
-            # אם החיבור מול שרת האפליקציה נכשלה -> חוזרים למסך בקשות DNS
             if result is None:
                 print("Failed to connect the application... Returning to DNS menu.\n")
+                break # חוזר לתפריט DNS
 
-        else:
-            print(f"General DNS query result: {user_domain} -> {resolved_ip}\n")
+            # אחרי שהורדנו את הסרט מה השלב הבא
+            print("\nWhat next?")
+            print("1. Download another movie")
+            print("2. Back to DNS menu")
+            print("3. Exit")
+
+            choice = input("choose 1/2/3: ").strip()
+
+            while choice not in("1", "2", "3"):
+                print("Invalid choice. Please choose 1, 2, or 3.")
+                choice = input("Choose 1/2/3: ").strip()
+
+            if choice == "1":
+                #נשארים בלולאת האפליקציה ומורידים שוב
+                continue
+
+            elif choice == "2":
+                # יציאה מלולאת האפליקציה וחזרה לתפריט DNS
+                break
+
+            else: # choice == "3"
+                print("GoodBye! -> Connection closed")
+                exit(0)
 
 
 if __name__ == "__main__":
