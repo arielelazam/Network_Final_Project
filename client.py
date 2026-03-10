@@ -342,7 +342,7 @@ def connect_to_app(app_ip):
     print("Downloading the movie segments by UDP...")
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_sock: # נגדיר סוקט ממשפחת IPv4 ומסוג ucp
-        udp_sock.settimeout(10) # נגדיר לסוקט TIMEOUT לקבלת מידע
+        udp_sock.settimeout(30) # נגדיר לסוקט TIMEOUT לקבלת מידע
 
         downloading_segments = 0 # ניצור מונה שיספור כמה סגמנטים הורדנו
         current_quality = "MEDIUM" # נשמור את האיכות המבוקשת וכברירת מחדל נאתחל אותה ל-MEDIUM
@@ -389,6 +389,15 @@ def connect_to_app(app_ip):
 
                 # נסדר את חתיכות הסגמנט
                 if last_seq is not None: # אם אכן סיימנו לאסוף את החבילות וקיבלנו את החבילה האחרונה
+
+                    missing_chunks = [seq for seq in range(last_seq + 1) if seq not in received_chunks] # נשמור את כל חתיכות הסגמנט שלא ירדו על מנת למנוע תקיעה של התוכנית
+
+                    # אם חסרה חתיכת סגמנט, נדפיס הודעה ללקוח על כך ונוריד את האיכות ל-LOW בשביל להפחית את הסיכוי שזה יקרה גם בסגמנט הבא ונדלג על הסגמנט
+                    if missing_chunks:
+                        print(f"Missing Chunks {missing_chunks} in segment {segment}. Segment download incomplete - skipping this segment")
+                        current_quality = "LOW"
+                        continue
+
                     ordered_chunks = [received_chunks[seq] for seq in range(last_seq + 1)]
                     segment_data = b"".join(ordered_chunks) # נשמור את המידע של הסגמנט בצורה מסודרת ובבתים
                     segment_size = len(segment_data) # נשמור את גודל הסגמנט בשביל שנדע להוריד/להעלות את איכות הסגמנט הבא
