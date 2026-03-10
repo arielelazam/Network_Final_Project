@@ -82,12 +82,8 @@ def split_video_to_segments(input_path, output_dir, movie_name):
 
     return num_segments # במידה והכל צלח כראוי, נחזיר את מספר הסגמנטים שהומרו בהצלחה לכל אחת מהאיכויות
 
-
+# הפונקציה האחראית על יצירת הקטלוג
 def create_catalog_from_videos():
-
-    print("*" * 30)
-    print("Real Video Processing Script")
-    print("*" * 30 + "\n")
 
     # אם התיקייה עם הסרטונים לא קיימת, התוכנית לא תוכל לרוץ ולכן נבקש מהלקוח ליצור אותה ולחזור לנסות שוב
     if not os.path.exists(SOURCE_DIR):

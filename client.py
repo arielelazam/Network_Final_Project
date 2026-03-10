@@ -203,14 +203,13 @@ def dhcp_renew_ip(current_ip: str):
 
 # פונקציית קבלת כתובת מה-DNS
 def dns_resolve(requested_domain : str):
-    print("Starting the process with DNS to resolve IP address\n")  # נגדיר זמן לזריקת שגיאה אם מידע לא הגיע ותוקע את התוכנית
+    print("Starting the process with DNS to resolve IP address\n")
 
-   # ניקוי ולידציה בסיסית לקלט (אריאל תרשום במילים שלך)
+   # נבצע "ניקוי" של הדומיין המבוקש
     requested_domain = requested_domain.strip()
     if not requested_domain:
         print("Empty domain is not allowed")
         return None
-
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:  # ניצור סוקט ממשפחת IPv4 ומסוג UDP
         sock.settimeout(TIMEOUT)  # נגדיר זמן לזריקת שגיאה אם מידע לא הגיע ותוקע את התוכנית
@@ -543,6 +542,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-

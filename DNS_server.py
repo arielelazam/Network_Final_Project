@@ -60,27 +60,27 @@ def query_doh(domain: str) -> tuple[Optional[str], Optional[int]]:
 
         answers = data.get("Answer", []) # נקלוט את התשובות שהתקבלו מהמידע
         if not answers: # אם לא התקבל מידע נחזיר הודעה ללקוח
-            print(f"[DOH] No answer for {domain}")
+            print(f"DOH No answer for {domain}")
             return None, None
 
         for answer in answers: # נעבור על התשובות שהתקבלו
             if answer.get("type") == 1:  # אם אכן התקבל Type A כנדרש (מקובל לסמנו ב-1)
                 ip = answer.get("data") # נשמור את כתובת ה-IP
                 ttl = answer.get("TTL", CACHE_TTL) # נשמור את ה-TTL
-                print(f"[DOH] {domain} -> {ip} (TTL: {ttl}s)")
+                print(f"DOH {domain} -> {ip} (TTL: {ttl}s)")
                 return ip, ttl # נחזיר את ה-IP שהתקבל
 
         return None, None # אם לא נמצאה תשובה שתואמת ל-Type A נחזיר None
 
     # תפיסת שגיאות אפשריות
     except urllib.error.URLError as e:
-        print(f"[DOH ERROR] Connection failed: {e}")
+        print(f"DOH ERROR Connection failed: {e}")
         return None, None
     except json.JSONDecodeError as e:
-        print(f"[DOH ERROR] Invalid JSON: {e}")
+        print(f"DOH ERROR Invalid JSON: {e}")
         return None, None
     except Exception as e:
-        print(f"[DOH ERROR] {e}")
+        print(f"DOH ERROR {e}")
         return None, None
 
 # פונקציה לשליפת הדומיין המבוקש
@@ -90,7 +90,7 @@ def resolve_domain(domain: str) -> tuple[Optional[str], Optional[str]]:
     # תחילה, ננסה לבדוק האם הוא במאגר הכתובות הסטטי
     if domain in LOCAL_RECORDS:
         ip = LOCAL_RECORDS[domain]
-        print(f"[LOCAL] {domain} -> {ip}")
+        print(f"LOCAL {domain} -> {ip}")
         return ip, "LOCAL"
 
     # אם הדומיין לא במאגר הכתובות הסטטי, נבדוק האם הוא קיים ב-Cache
@@ -99,13 +99,13 @@ def resolve_domain(domain: str) -> tuple[Optional[str], Optional[str]]:
         remaining = expiry - time.time()
 
         if remaining > 0: # במידה והדומיין ב-Cache נבדוק שזמן התפוגה שלו לא פג ואם זמנו לא פג, נחזיר אותו
-            print(f"[CACHE HIT] {domain} -> {ip} (TTL: {int(remaining)}s)")
+            print(f"CACHE HIT {domain} -> {ip} (TTL: {int(remaining)}s)")
             return ip, "CACHE"
         else: # אם פג תוקפו, נמחק אותו מה-Cache והקוד ימשיך לשלב הבא
-            print(f"[CACHE] Expired entry for {domain}")
+            print(f"CACHE Expired entry for {domain}")
             del dns_cache[domain]
 
-    print(f"[DOH QUERY] Querying {domain}...") # הדומיין המבוקש לא נמצא אצלנו בשרת ולכן נצא "החוצה" לבקש אותו
+    print(f"DOH Querying {domain}...") # הדומיין המבוקש לא נמצא אצלנו בשרת ולכן נצא "החוצה" לבקש אותו
     ip, ttl = query_doh(domain)
 
     # אם הצלחנו לקבל כתובת IP מהשרת החיצוני, נשמור אותו ב-Cache ונחזיר אותו
@@ -117,7 +117,7 @@ def resolve_domain(domain: str) -> tuple[Optional[str], Optional[str]]:
 
     return None, None
 
-
+# פונקציה לניהול בקשות הלקוח
 def handle_request(data: bytes, addr) -> dict:
     try:
         request = json.loads(data.decode(ENCODING)) # המרת הבתים שהתקבלו לפורמט JSON
@@ -126,7 +126,7 @@ def handle_request(data: bytes, addr) -> dict:
         if not domain: # אם לא נמצא שם דומיין, נחזיר הודעה
             return {"status": "error", "reason": "MISSING_DOMAIN"}
 
-        print(f"\n>> [REQUEST] from {addr}: {domain}")
+        print(f"\nREQUEST from {addr}: {domain}")
 
         ip, method = resolve_domain(domain) # אם נמצא שם הדומיין, ננסה לשלוף את כתובת ה-IP שלו ואת המקור ממנו שלפנו אותו
 
@@ -161,7 +161,7 @@ def display_cache():
     # עבור כל דומיין ב-Cache נדפיס את הזמן שנותר לו
     for domain, (ip, expiry) in dns_cache.items():
         remaining = max(0, int(expiry - current))
-        print(f"  {domain} -> {ip} (TTL: {remaining}s)")
+        print(f"{domain} -> {ip} (TTL: {remaining}s)")
     print("--------------------\n")
 
 # פונקציה ראשית
@@ -186,7 +186,7 @@ def main():
         response_data = json.dumps(response).encode(ENCODING) # נמיר חזרה לבתים
         sock.sendto(response_data, addr) # נשלח את התשובה בחזרה ללקוח
 
-        print(f"<< [RESPONSE] {response['status']}")
+        print(f"RESPONSE: {response['status']}")
 
         # הצגת cache כל כמה בקשות
         if len(dns_cache) > 0:
