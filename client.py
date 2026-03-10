@@ -1,7 +1,5 @@
-import socket
-import json
-import time
-import os
+import socket, json, time, os, ipaddress
+
 
 # הגדרות כלליות לעבודה מול השרתים
 DHCP_IP = "255.255.255.255"  # broadcast
@@ -96,7 +94,9 @@ def dhcp_get_ip():
                     "requested_ip": offered_ip
                 }
                 print("Sending REQUEST message to DHCP\n")
-                sock.sendto(encode_json(requested_msg), (DHCP_IP, DHCP_PORT))
+
+                request_target_ip = KNOWN_DHCP_SERVER_IP if KNOWN_DHCP_SERVER_IP else DHCP_IP
+                sock.sendto(encode_json(requested_msg), (request_target_ip, DHCP_PORT))
 
                 # מאזינים עד שמקבלים ACK/NAK רלוונטי(שייך ל client_id)
                 while True:
@@ -202,9 +202,15 @@ def dhcp_renew_ip(current_ip: str):
             return None
 
 # פונקציית קבלת כתובת מה-DNS
-def dns_resolve():
-    print(
-        "Starting the process with DNS to resolve IP address\n")  # נגדיר זמן לזריקת שגיאה אם מידע לא הגיע ותוקע את התוכנית
+def dns_resolve(requested_domain : str):
+    print("Starting the process with DNS to resolve IP address\n")  # נגדיר זמן לזריקת שגיאה אם מידע לא הגיע ותוקע את התוכנית
+
+   # ניקוי ולידציה בסיסית לקלט (אריאל תרשום במילים שלך)
+    requested_domain = requested_domain.strip()
+    if not requested_domain:
+        print("Empty domain is not allowed")
+        return None
+
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:  # ניצור סוקט ממשפחת IPv4 ומסוג UDP
         sock.settimeout(TIMEOUT)  # נגדיר זמן לזריקת שגיאה אם מידע לא הגיע ותוקע את התוכנית
@@ -213,15 +219,14 @@ def dns_resolve():
         for attempt in range(1, DNS_RETRIES + 1):
             # נשלח ל-DNS את הדומיין שאנחנו רוצים לקבל את ה-IP שלו
             try:
-                query = {"domain": MY_SITE_DOMAIN}
-                print(f"Sending query to DNS (attempt {attempt}/{DNS_RETRIES})\n")
+                query = {"domain": requested_domain}
+                print(f"Sending query to DNS for '{requested_domain}' (attempt {attempt}/{DNS_RETRIES})\n")
                 sock.sendto(encode_json(query), (DNS_IP, DNS_PORT))
 
                 data, addr = sock.recvfrom(1024)
                 response = decode_json(data)
 
-                if response.get(
-                        "status") != "success":  # אם מסיבה כלשהי ה-DNS לא החזיר לנו את ה-IP המבוקש נחזיר הדועת שגיאה ואת הסיבה שגרמה לה לקרות
+                if response.get("status") != "success":  # אם מסיבה כלשהי ה-DNS לא החזיר לנו את ה-IP המבוקש נחזיר הדועת שגיאה ואת הסיבה שגרמה לה לקרות
                     print(f"DNS is not responding - ERROR!!!")
                     if response.get("reason"):
                         print(f"The reason for the ERROR is : {response.get('reason')}")
@@ -241,8 +246,7 @@ def dns_resolve():
                         continue
                     return None
 
-                print(
-                    f"The IP of the requested domain {resolved_domain} is: {resolved_ip} and the method is: {resolved_method}\n")
+                print(f"The IP of the requested domain {resolved_domain} is: {resolved_ip} and the method is: {resolved_method}\n")
                 return resolved_ip
 
             # תפיסת שגיאות TIMEOUT או שגיאות אחרות לא צפויות
@@ -253,6 +257,18 @@ def dns_resolve():
 
             except Exception as e:
                 print(f"UNEXPECTED ERROR!!! Reason: {e}")
+
+# פונקציית עזר: מחזירה True רק אם הקלט הוא לא IP
+def is_not_ip_input(user_input: str) -> bool:
+    normalized = user_input.strip()
+    if not normalized:
+        return False
+
+    try:
+        ipaddress.ip_address(normalized)  # אם הצליח, זה IP
+        return False
+    except ValueError:
+        return True  # לא IP
 
 
 # פונקציית עזר לקבלת הודעות tcp משרת האפליקציה
@@ -473,23 +489,10 @@ def main():
     # חידוש IP כל 9 דקות (מתוך 10 דקות)
     next_renew_time = time.time() + 540
 
-    app_ip = dns_resolve() # נבקש מה-DNS את כתובת ה-IP של השרת מולו אנחנו רוצים לעבוד
-
-    # אם לא הצלחנו לקבל את הכתובת מה-DNS נחזיר הודעת שגיאה
-    if not app_ip:
-        print("Failed to get IP from DNS")
-        return
-
-    print("\nEverything worked successfully!\n")
-    print(f"My IP: {my_ip}, App IP: {app_ip}\n")
-    print("Ready to connect to application!\n")
-
-
-
     # לולאת הממשק של הלקוח מול האפליקציה
     while True:
 
-        # אם הגיע הזמן לחדש כתובת IP   - ננסה לחדש
+        # אם הגיע הזמן לחדש כתובת IP - ננסה לחדש
         if time.time() >= next_renew_time:
             renewed_ip = dhcp_renew_ip(my_ip)
             if renewed_ip:
@@ -504,23 +507,42 @@ def main():
                     return
                 next_renew_time = time.time() + 540
 
-        result = connect_to_app(app_ip) # נבצע את החיבור לשרת האפליקציה שיכלול את בחירת הסרט הראשונה שהלקוח רוצה להוריד
+        user_domain = input("Enter domain (not IP), or 'exit':\n").strip()
 
-        if result is None: # אם החיבור לשרת האפליקציה כשל, נדפיס הודעה ונסגור את ההתקשרות
-            print("Failed to connect the application... Exiting")
-            break
-
-        print("\n" + "*"*60)
-        choice = input("What would you want to do now? \n1. Download another movie.\n2. Exit.") # לאחר סיום ההורדה, נשאל את הלקוח מה הוא רוצה לעשות להמשך
-
-        while choice not in ["1", "2"]: # אם הבחירה לא טובה, נבקש ממנו שוב
-            print("Invalid choice. Please choose 1 or 2.")
-            choice = input("What would you want to do now? \n1. Download another movie.\n2. Exit.")
-
-        # אם הוא בחר לסגור את התקשורת עם האפליקציה, נחזיר הודעה ונסגור
-        if choice == "2":
+        # אם רוצים לצאת
+        if user_domain.lower() == "exit":
             print("GoodBye! -> Connection closed")
             break
 
+        # אם הקלט הוא כתובת IP -> מדפיסים הודעה וחוזרים לתחילת הלולאה
+        if not is_not_ip_input(user_domain):
+            print("Invalid input: please enter a domain, not an IP.\n")
+            continue
+
+        # שולחים את הדומיין לשרת ה DNS
+        resolved_ip = dns_resolve(user_domain)
+
+        # אם לא מצא -> חוזרים ללולאה כדי לאפשר למשתמש ניסיון נוסף עם דומיין אחר
+        if not resolved_ip:
+            print("Failed to resolve via DNS. Try again.\n")
+            continue
+
+        # לוגיקת הניתוב
+
+        if user_domain.lower() == "app.local":  # אם המשתמש ביקש את כתובת שרת האפליקציה מפנים אותו אליה
+            print("Redirecting to application server...\n")
+            result = connect_to_app(resolved_ip)
+
+            # אם החיבור מול שרת האפליקציה נכשלה -> חוזרים למסך בקשות DNS
+            if result is None:
+                print("Failed to connect the application... Returning to DNS menu.\n")
+
+        else:
+            print(f"General DNS query result: {user_domain} -> {resolved_ip}\n")
+
+
 if __name__ == "__main__":
     main()
+
+
+

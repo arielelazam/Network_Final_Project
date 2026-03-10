@@ -239,6 +239,10 @@ def send_chunk_with_ack(sock, client_addr, chunk_num, data, is_last):
             ack_data, addr = sock.recvfrom(1024) # נקלוט את המידע שהתקבל מהלקוח ואת הכתובת שלו
             ack = json.loads(ack_data.decode(ENCODING))
 
+            # בודקים שה-ACK הגיע מאותו לקוח
+            if addr != client_addr:
+                continue
+
             if ack.get("type") == "ACK" and ack.get("seq") == chunk_num: # אם סוג המידע שהתקבל מהלקוח הוא ACK
                 print(f"Chunk {chunk_num} ACK received (attempt {attempt + 1})")
                 sock.settimeout(old_timeout) # אם אכן התקבל ACK כנדרש, נעדכן בחזרה את ה-TimeOut של הסוקט
