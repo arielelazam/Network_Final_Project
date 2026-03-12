@@ -31,7 +31,7 @@ def dhcp_get_ip():
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:  # ניצור סוקט ממשפחת IPv4 מסוג UDP
         sock.settimeout(TIMEOUT)  # נגדיר זמן לזריקת שגיאה אם מידע לא הגיע ותוקע את התוכנית
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  #
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
         # עוד ניסיונות במקרה של איבוד חבילה (timeout/retry loop)
         for attempt in range(1, DHCP_RETRIES + 1):
@@ -84,7 +84,6 @@ def dhcp_get_ip():
                     print("Invalid DHCP OFFER - missing client_id/offered_ip")
                     continue
 
-
                 print(f"Client ID: {client_id},Offered IP: {offered_ip}, Subnet mask: {subnet_mask}, Time to take the offered IP: {offer_timeout} seconds\n")
 
                 # קיבלנו את הצעת ה-DHCP וכעת נשלח לו REQUEST ונאשר לו שאנחנו רוצים את ההצעה
@@ -109,7 +108,7 @@ def dhcp_get_ip():
 
                     # אם הגיע ACK שלא שייך ללקוח שלנו - להתעלם
                     if ack.get("type") == "DHCP_ACK" and ack.get("client_id") != client_id:
-                        print(f"Ignoring ACK for different client_id: {ack.get('client_id')}")  # 🔴 ADDED
+                        print(f"Ignoring ACK for different client_id: {ack.get('client_id')}")
                         continue
 
                     break  # הגיע ACK/NAK רלוונטי
@@ -150,9 +149,10 @@ def dhcp_renew_ip(current_ip: str):
         print("No known DHCP server IP. Run initial DHCP flow first.")
         return None
 
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock: # ניצור סוקט ממשפחת IPv4 ומסוג UDP
         sock.settimeout(TIMEOUT)
 
+        # נכין את הודעת ה-Renew ונשלח אותה לשרת ה-DHCP
         try:
             renew_msg = {
                 "type": "DHCP_RENEW",
@@ -192,11 +192,11 @@ def dhcp_renew_ip(current_ip: str):
 
             return renewed_ip
 
-        # אם לא התקבלה תשובה בזמן שהוגדר
+        # טיפול בשגיאות timeout או שגיאות אחרות לא צפויות
         except socket.timeout:
             print("TIMEOUT ERROR during DHCP renew!!!")
             return None
-        # טיפול בשגיאה לא צפויה
+
         except Exception as e:
             print(f"UNEXPECTED ERROR during DHCP renew!!! Reason: {e}")
             return None
@@ -257,7 +257,7 @@ def dns_resolve(requested_domain : str):
             except Exception as e:
                 print(f"UNEXPECTED ERROR!!! Reason: {e}")
 
-# פונקציית עזר: מחזירה True רק אם הקלט הוא לא IP
+# פונקציית עזר שתסייע לנו להבין האם יש צורך לפנות לשרת ה-DNS
 def is_not_ip_input(user_input: str) -> bool:
     normalized = user_input.strip()
     if not normalized:
@@ -266,9 +266,8 @@ def is_not_ip_input(user_input: str) -> bool:
     try:
         ipaddress.ip_address(normalized)  # אם הצליח, זה IP
         return False
-    except ValueError:
-        return True  # לא IP
-
+    except ValueError: # אחרת, זה שם דומיין
+        return True
 
 # פונקציית עזר לקבלת הודעות tcp משרת האפליקציה
 def tcp_recv(sock):
@@ -471,27 +470,20 @@ def connect_to_app(app_ip):
     return downloading_segments
 
 
-
-# פונקצייה ראשית
 def main():
-    print("Temp client is running!\n")
+    print("Client is running!\n")
 
-    my_ip = dhcp_get_ip() # נפנה ל-DHCP לקבל IP
+    my_ip = dhcp_get_ip()
 
-    # אם לא הצלחנו לקבל כתובת IP מה-DHCP נחזיר הודעת שגיאה
     if not my_ip:
         print("Failed to get IP from DHCP")
         return
 
     time.sleep(1)
-
-    # חידוש IP כל 9 דקות (מתוך 10 דקות)
     next_renew_time = time.time() + 540
 
-    # לולאת הממשק של הלקוח מול האפליקציה
     while True:
 
-        # אם הגיע הזמן לחדש כתובת IP - ננסה לחדש
         if time.time() >= next_renew_time:
             renewed_ip = dhcp_renew_ip(my_ip)
             if renewed_ip:
@@ -508,41 +500,31 @@ def main():
 
         user_domain = input("Enter domain (not IP), or 'exit':\n").strip()
 
-        # אם רוצים לצאת
         if user_domain.lower() == "exit":
             print("GoodBye! -> Connection closed")
             break
 
-        # אם הקלט הוא כתובת IP -> מדפיסים הודעה וחוזרים לתחילת הלולאה
         if not is_not_ip_input(user_domain):
             print("Invalid input: please enter a domain, not an IP.\n")
             continue
 
-        # שולחים את הדומיין לשרת ה DNS
         resolved_ip = dns_resolve(user_domain)
 
-        # אם לא מצא -> חוזרים ללולאה כדי לאפשר למשתמש ניסיון נוסף עם דומיין אחר
         if not resolved_ip:
             print("Failed to resolve via DNS. Try again.\n")
             continue
 
-        # לוגיקת הניתוב
-
-        if user_domain != "app.local":  # אם המשתמש ביקש את כתובת שרת האפליקציה מפנים אותו אליה
+        if user_domain != "app.local":
             print(f"General DNS query result: {user_domain} -> {resolved_ip}\n")
             continue
-        # כניסה לשרת הסרטים
+
         while True:
             result = connect_to_app(resolved_ip)
             if result is None:
                 print("Failed to connect the application... Returning to DNS menu.\n")
-                break # חוזר לתפריט DNS
+                break
 
-            # אחרי שהורדנו את הסרט מה השלב הבא
-            print("\nWhat next?")
-            print("1. Download another movie")
-            print("2. Back to DNS menu")
-            print("3. Exit")
+            print("\nWhat next?\n1. Download another movie.\n2. Back to DNS menu.\n3. Exit.")
 
             choice = input("choose 1/2/3: ").strip()
 
@@ -551,17 +533,14 @@ def main():
                 choice = input("Choose 1/2/3: ").strip()
 
             if choice == "1":
-                #נשארים בלולאת האפליקציה ומורידים שוב
                 continue
 
             elif choice == "2":
-                # יציאה מלולאת האפליקציה וחזרה לתפריט DNS
                 break
 
-            else: # choice == "3"
+            else:
                 print("GoodBye! -> Connection closed")
                 exit(0)
-
 
 if __name__ == "__main__":
     main()
