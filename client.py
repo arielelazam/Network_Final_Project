@@ -526,7 +526,7 @@ def main():
 
             print("\nWhat next?\n1. Download another movie.\n2. Back to DNS menu.\n3. Exit.")
 
-            choice = input("choose 1/2/3: ").strip()
+            choice = input("Choose 1/2/3: ").strip()
 
             while choice not in("1", "2", "3"):
                 print("Invalid choice. Please choose 1, 2, or 3.")
