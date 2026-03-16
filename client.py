@@ -498,14 +498,14 @@ def main():
                     return
                 next_renew_time = time.time() + 540
 
-        user_domain = input("Enter domain (not IP), or 'exit':\n").strip()
+        user_domain = input("Enter some Domain name (app.local for the application), or 'exit':\n").strip()
 
         if user_domain.lower() == "exit":
             print("GoodBye! -> Connection closed")
             break
 
         if not is_not_ip_input(user_domain):
-            print("Invalid input: please enter a domain, not an IP.\n")
+            print("Invalid input: please enter a Domain name and make sure it's not an IP.\n")
             continue
 
         resolved_ip = dns_resolve(user_domain)
