@@ -11,7 +11,7 @@ TCP_PORT = 9000 # ה-PORT עליו שרת האפליקציה יאזין לבקש
 UDP_PORT = 9001 # ה-PORT עליו שרת האפליקציה יאזין לבקשות UDP
 ENCODING = "utf-8"
 SIMULATE_NETWORK = True # נגדיר "מפסק" למצב שידמה שינויים במצבי הרשת
-PACKET_LOSS_RATE = 0.08 # נרצה שכ-15% מהחבילות "יאבדו" בשביל לדמות מצבי איבוד חבילות
+PACKET_LOSS_RATE = 0.08 # נרצה שכ-8% מהחבילות "יאבדו" בשביל לדמות מצבי איבוד חבילות
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # הנתיב של תיקיית ה-script הנוכחי
 MEDIA_DIR = os.path.join(SCRIPT_DIR, "media") # הנתיב של תיקיית המדיה
@@ -217,7 +217,7 @@ def send_chunk_with_ack(sock, client_addr, chunk_num, data, is_last):
             "last": is_last  # האם זו החתיכה האחרונה
         }
 
-        # אם אנחנו במצב המדמה שינויים ברשת וזהו ניסיון השליחה הראשון ובנוסף זה בתוך ה-15% שנרצה שחבילה תלך לאיבוד
+        # אם אנחנו במצב המדמה שינויים ברשת וזהו ניסיון השליחה הראשון ובנוסף זה בתוך ה-8% שנרצה שחבילה תלך לאיבוד
         if SIMULATE_NETWORK and attempt == 0 and random.random() < PACKET_LOSS_RATE:
             print(f"Packet number {chunk_num} lost...")
             time.sleep(ACK_TIMEOUT) # ניזום את העיכוב של ה-ACK בכוונה
