@@ -42,7 +42,7 @@ def cleanup_cache():
             expired.append(domain)
     # נמחק מה-cache את כל אלה שנמצאים במערך
     for domain in expired:
-        print(f"[CACHE CLEANUP] Expired: {domain}")
+        print(f"CACHE CLEANUP Expired: {domain}")
         del dns_cache[domain]
 
 # פונקציה למימוש בקשות DoH
@@ -168,6 +168,8 @@ def display_cache():
 def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # ניצור סוקט UDP כך שיוכלו לפנות לשרת
     sock.bind((DNS_IP, DNS_PORT)) # נגדיר לו את ה-IP וה-PORT שאליו יפנה לקוח שירצה ליצור קשר
+    sock.settimeout(1.0)
+
 
     print("=" * 30)
     print(f"DNS Server: {DNS_IP}:{DNS_PORT}")
@@ -177,20 +179,32 @@ def main():
     print("\nWaiting for queries...\n")
 
     while True:
+
         cleanup_cache() # ננקה מה-Cache דומיינים שפג תוקפם
 
-        data, addr = sock.recvfrom(1024) # נקבל מהלקוח את הבקשה אותה הוא מבקש ואת כתובת ה-IP שלו שאליה נחזיר לו תשובה
+        try:
+            data, addr = sock.recvfrom(1024)  # נקבל מהלקוח את הבקשה אותה הוא מבקש ואת כתובת ה-IP שלו שאליה נחזיר לו תשובה
 
-        response = handle_request(data, addr) # נקבל מילון המכיל את התשובה ואת כתובת ה-IP ומאיפה שלפנו אותה (אם נמצאה)
+            response = handle_request(data, addr)  # נקבל מילון המכיל את התשובה ואת כתובת ה-IP ומאיפה שלפנו אותה (אם נמצאה)
 
-        response_data = json.dumps(response).encode(ENCODING) # נמיר חזרה לבתים
-        sock.sendto(response_data, addr) # נשלח את התשובה בחזרה ללקוח
+            response_data = json.dumps(response).encode(ENCODING)  # נמיר חזרה לבתים
+            sock.sendto(response_data, addr)  # נשלח את התשובה בחזרה ללקוח
 
-        print(f"RESPONSE: {response['status']}")
+            print(f"RESPONSE: {response['status']}")
 
-        # הצגת cache כל כמה בקשות
-        if len(dns_cache) > 0:
-            display_cache()
+            # הצגת cache כל כמה בקשות
+            if len(dns_cache) > 0:
+                display_cache()
+
+        except socket.timeout:
+            continue
+
+        except json.JSONDecodeError:
+            print("Received invalid data (not JSON)")
+            continue
+
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
 
 
 if __name__ == "__main__":

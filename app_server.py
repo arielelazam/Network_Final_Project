@@ -44,21 +44,27 @@ def tcp_send(sock, msg):
 
 # פונקציה האחראית על קריאת הודעת tcp
 def tcp_recv(sock):
-    length_bytes = sock.recv(4) #  נקרא את אורכה של ההודעה בבייטים
-    if not length_bytes: # אם אין בייטים, נסיק שהיא ריקה ונחזיר דיקשנרי ריק
-        return {}
-
-    length = int.from_bytes(length_bytes, "big") # נשמור את אורך ההודעה
-
-    # קריאת המידע
-    data = b"" # נגדיר את ה-buffer של בייטים שיאסוף את כל פיסות המידע שיגיעו
-    while len(data) < length: # כל עוד מספר הבייטים שיש ב-buffer קטן ממספר הבייטים של ההודעה
-        chunk = sock.recv(length - len(data)) # נקלוט את מספר הבייטים החסרים לנו בשביל שנדע שקראנו את כל ההודעה
-        if not chunk: # אם לא הצלחנו לקרוא בייטים לפני שסיימנו לקרוא את כל הבייטים של ההודעה, נחזיר דיקשנרי ריק
+    try:
+        length_bytes = sock.recv(4)  # נקרא את אורכה של ההודעה בבייטים
+        if not length_bytes:  # אם אין בייטים, נסיק שהיא ריקה ונחזיר דיקשנרי ריק
             return {}
-        data += chunk # נוסיף ל-buffer את הבייטים שקראנו
 
-    return json.loads(data.decode(ENCODING)) # נחזיר את מה שקראנו ארוז כקובץ JSON
+        length = int.from_bytes(length_bytes, "big")  # נשמור את אורך ההודעה
+
+        # קריאת המידע
+        data = b""  # נגדיר את ה-buffer של בייטים שיאסוף את כל פיסות המידע שיגיעו
+        while len(data) < length:  # כל עוד מספר הבייטים שיש ב-buffer קטן ממספר הבייטים של ההודעה
+            chunk = sock.recv(length - len(data))  # נקלוט את מספר הבייטים החסרים לנו בשביל שנדע שקראנו את כל ההודעה
+            if not chunk:  # אם לא הצלחנו לקרוא בייטים לפני שסיימנו לקרוא את כל הבייטים של ההודעה, נחזיר דיקשנרי ריק
+                return {}
+            data += chunk  # נוסיף ל-buffer את הבייטים שקראנו
+
+        return json.loads(data.decode(ENCODING))  # נחזיר את מה שקראנו ארוז כקובץ JSON
+
+    # טיפול בשיגאות לא צפויות
+    except Exception as e:
+        print(f"Unexpected error in tcp_recv: {e}")
+        return {}
 
 # פונקציית טיפול בבקשות לקוח מסוג TCP
 def handle_tcp_client(client_sock, addr, catalog):
@@ -260,6 +266,7 @@ def handle_udp(catalog):
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # ניצור סוקט ממשפחת IPv4 ומסוג UDP
     sock.bind((SERVER_IP, UDP_PORT)) # נחבר את הסוקט ל-IP ול-PORT שהקצנו לו
+    sock.settimeout(1.0)
     print(f"UDP Listening on {SERVER_IP}:{UDP_PORT}")
 
     while True:
@@ -275,6 +282,13 @@ def handle_udp(catalog):
 
             # שליחת הסגמנט (עם Reliability + Flow + Congestion)
             send_segment_reliable(sock, client_addr, movie_name, seg_num, quality) # נבצע שליחה של הסגמנט המבוקש, באיכות המבוקשת
+
+        except socket.timeout:
+            continue
+
+        except json.JSONDecodeError:
+            print("Received invalid JSON data")
+            continue
 
         # טיפול בשגיאות לא צפויות
         except Exception as e:

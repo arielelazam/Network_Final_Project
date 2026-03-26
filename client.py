@@ -272,21 +272,29 @@ def is_not_ip_input(user_input: str) -> bool:
 # פונקציית עזר לקבלת הודעות tcp משרת האפליקציה
 def tcp_recv(sock):
 
-    length_in_bytes = sock.recv(4) # נקלוט את 4 הבתים הראשונים בהודעה שיגידו לנו כמה בתים יש בתוכן ההודעה
-    if not length_in_bytes: # אם לא התקבל אורך, נחזיר דיקשנרי ריק
+    try:
+        length_in_bytes = sock.recv(4)  # נקלוט את 4 הבתים הראשונים בהודעה שיגידו לנו כמה בתים יש בתוכן ההודעה
+        if not length_in_bytes:  # אם לא התקבל אורך, נחזיר דיקשנרי ריק
+            return {}
+
+        length = int.from_bytes(length_in_bytes, byteorder="big")  # נמיר את אורך ההודעת ל-int
+
+        data = b""  # נגדיר את ה-buffer שיאסוף את חתיכות המידע שיגיעו (מגיעות בבתים)
+        while len(data) < length:  # כל עוד ה-buffer שלא מכיל את כל תכולת ההודעה
+            chunk = sock.recv(length - len(data))  # ננסה לקלוט בתים עד לאורך הנדרש שנדע שקיבלנו את כל המידע
+            if not chunk:  # אם לא קיבלנו פיסת מידע, יש בעיה ונחזיר דיקשנרי ריק
+                return {}
+            data += chunk  # נוסיף ל-buffer את המידע שהצלחנו לאסוף באינטרציה הנוכחית
+
+        return decode_json(data)  # נחזיר את המידע שנאסף ב-JSON
+
+    except socket.timeout:
+        print("Timeout!!!!")
         return {}
 
-    length = int.from_bytes(length_in_bytes, byteorder="big") # נמיר את אורך ההודעת ל-int
-
-    data = b"" # נגדיר את ה-buffer שיאסוף את חתיכות המידע שיגיעו (מגיעות בבתים)
-    while len(data) < length: # כל עוד ה-buffer שלא מכיל את כל תכולת ההודעה
-        chunk = sock.recv(length - len(data)) # ננסה לקלוט בתים עד לאורך הנדרש שנדע שקיבלנו את כל המידע
-        if not chunk: # אם לא קיבלנו פיסת מידע, יש בעיה ונחזיר דיקשנרי ריק
-            return {}
-        data += chunk # נוסיף ל-buffer את המידע שהצלחנו לאסוף באינטרציה הנוכחית
-
-    return decode_json(data) # נחזיר את המידע שנאסף ב-JSON
-
+    except Exception as e:
+        print(f"TCP Receive error: {e}")
+        return {}
 # פונקציית החיבור לשרת האפליקציה
 def connect_to_app(app_ip):
 
@@ -301,7 +309,7 @@ def connect_to_app(app_ip):
 
             list_request = {"type": "LIST"} # נגדיר את הדיקשנרי לבקשת קבלת רשימת הסרטים מהשרת
             list_data = encode_json(list_request) # נמיר את הדיקשנרי ל-JSON ואז לרצף של בתים
-            tcp_sock.sendall(len( list_data).to_bytes(4, byteorder="big") + list_data)  # נשלח את המידע בצורה כזאת כך שמספר הבתים של המידע (ב-big endian) ולאחר מכן את המידע עצמו
+            tcp_sock.sendall(len(list_data).to_bytes(4, byteorder="big") + list_data)  # נשלח את המידע בצורה כזאת כך שמספר הבתים של המידע (ב-big endian) ולאחר מכן את המידע עצמו
 
             list_response = tcp_recv(tcp_sock) # נקבל את רשימת הסרטים בעזרת פונקציית העזר
 
@@ -347,6 +355,10 @@ def connect_to_app(app_ip):
 
             print(f"The movie contains {total_number_of_segments} segments and the available qualities are: {', '.join(qualities)}")
 
+    except socket.timeout:
+        print(f"Error: Connection to {app_ip} timed out. The server might be busy.")
+        return None
+
     # טיפול בשיגאות לא צפויות
     except Exception as e:
         print(f"UNEXPECTED ERROR!!! Reason: {e}")
@@ -356,15 +368,15 @@ def connect_to_app(app_ip):
     print("Downloading the movie segments by UDP...")
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_sock: # נגדיר סוקט ממשפחת IPv4 ומסוג ucp
-        udp_sock.settimeout(30) # נגדיר לסוקט TIMEOUT לקבלת מידע
 
+        udp_sock.settimeout(30) # נגדיר לסוקט TIMEOUT לקבלת מידע
         downloading_segments = 0 # ניצור מונה שיספור כמה סגמנטים הורדנו
         current_quality = "MEDIUM" # נשמור את האיכות המבוקשת וכברירת מחדל נאתחל אותה ל-MEDIUM
         HIGH_TRESHOLD = 200000 # נגדיר סף להעלאת רמה
         LOW_TRESHOLD = 50000 # נגדיר סף להורדת רמה
 
         for segment in range(total_number_of_segments):
-            print(f"Segment number: {segment + 1}/{total_number_of_segments}. Downloaing in {current_quality} Quality: \n")
+            print(f"Segment number: {segment + 1}/{total_number_of_segments}. Downloading in {current_quality} Quality: \n")
 
             start_time = time.time() # נשמור את הזמן התחלת ההורדה
 
@@ -458,10 +470,12 @@ def connect_to_app(app_ip):
 
                 else: # אחרת, אם לא הצלחנו להוריד סגמנט, נדפיס הודעת שגיאה
                     print("Download Failed")
+
             # טיפול בשיגאות TIMEOUT
             except socket.timeout:
                 print("Download TimedOut! The network is too slow! Changing the quality to LOW")
                 current_quality = "LOW"
+
 
 
     print("\n" + "*"*60)
