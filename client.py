@@ -272,29 +272,21 @@ def is_not_ip_input(user_input: str) -> bool:
 # פונקציית עזר לקבלת הודעות tcp משרת האפליקציה
 def tcp_recv(sock):
 
-    try:
-        length_in_bytes = sock.recv(4)  # נקלוט את 4 הבתים הראשונים בהודעה שיגידו לנו כמה בתים יש בתוכן ההודעה
-        if not length_in_bytes:  # אם לא התקבל אורך, נחזיר דיקשנרי ריק
+    length_in_bytes = sock.recv(4) # נקלוט את 4 הבתים הראשונים בהודעה שיגידו לנו כמה בתים יש בתוכן ההודעה
+    if not length_in_bytes: # אם לא התקבל אורך, נחזיר דיקשנרי ריק
+        return {}
+
+    length = int.from_bytes(length_in_bytes, byteorder="big") # נמיר את אורך ההודעת ל-int
+
+    data = b"" # נגדיר את ה-buffer שיאסוף את חתיכות המידע שיגיעו (מגיעות בבתים)
+    while len(data) < length: # כל עוד ה-buffer שלא מכיל את כל תכולת ההודעה
+        chunk = sock.recv(length - len(data)) # ננסה לקלוט בתים עד לאורך הנדרש שנדע שקיבלנו את כל המידע
+        if not chunk: # אם לא קיבלנו פיסת מידע, יש בעיה ונחזיר דיקשנרי ריק
             return {}
+        data += chunk # נוסיף ל-buffer את המידע שהצלחנו לאסוף באינטרציה הנוכחית
 
-        length = int.from_bytes(length_in_bytes, byteorder="big")  # נמיר את אורך ההודעת ל-int
+    return decode_json(data) # נחזיר את המידע שנאסף ב-JSON
 
-        data = b""  # נגדיר את ה-buffer שיאסוף את חתיכות המידע שיגיעו (מגיעות בבתים)
-        while len(data) < length:  # כל עוד ה-buffer שלא מכיל את כל תכולת ההודעה
-            chunk = sock.recv(length - len(data))  # ננסה לקלוט בתים עד לאורך הנדרש שנדע שקיבלנו את כל המידע
-            if not chunk:  # אם לא קיבלנו פיסת מידע, יש בעיה ונחזיר דיקשנרי ריק
-                return {}
-            data += chunk  # נוסיף ל-buffer את המידע שהצלחנו לאסוף באינטרציה הנוכחית
-
-        return decode_json(data)  # נחזיר את המידע שנאסף ב-JSON
-
-    except socket.timeout:
-        print("Timeout!!!!")
-        return {}
-
-    except Exception as e:
-        print(f"TCP Receive error: {e}")
-        return {}
 # פונקציית החיבור לשרת האפליקציה
 def connect_to_app(app_ip):
 
@@ -482,7 +474,6 @@ def connect_to_app(app_ip):
     print(f"Download {downloading_segments}/{total_number_of_segments} segments")
 
     return downloading_segments
-
 
 def main():
     print("Client is running!\n")

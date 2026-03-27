@@ -44,27 +44,22 @@ def tcp_send(sock, msg):
 
 # פונקציה האחראית על קריאת הודעת tcp
 def tcp_recv(sock):
-    try:
-        length_bytes = sock.recv(4)  # נקרא את אורכה של ההודעה בבייטים
-        if not length_bytes:  # אם אין בייטים, נסיק שהיא ריקה ונחזיר דיקשנרי ריק
-            return {}
 
-        length = int.from_bytes(length_bytes, "big")  # נשמור את אורך ההודעה
-
-        # קריאת המידע
-        data = b""  # נגדיר את ה-buffer של בייטים שיאסוף את כל פיסות המידע שיגיעו
-        while len(data) < length:  # כל עוד מספר הבייטים שיש ב-buffer קטן ממספר הבייטים של ההודעה
-            chunk = sock.recv(length - len(data))  # נקלוט את מספר הבייטים החסרים לנו בשביל שנדע שקראנו את כל ההודעה
-            if not chunk:  # אם לא הצלחנו לקרוא בייטים לפני שסיימנו לקרוא את כל הבייטים של ההודעה, נחזיר דיקשנרי ריק
-                return {}
-            data += chunk  # נוסיף ל-buffer את הבייטים שקראנו
-
-        return json.loads(data.decode(ENCODING))  # נחזיר את מה שקראנו ארוז כקובץ JSON
-
-    # טיפול בשיגאות לא צפויות
-    except Exception as e:
-        print(f"Unexpected error in tcp_recv: {e}")
+    length_bytes = sock.recv(4) #  נקרא את אורכה של ההודעה בבייטים
+    if not length_bytes: # אם אין בייטים, נסיק שהיא ריקה ונחזיר דיקשנרי ריק
         return {}
+
+    length = int.from_bytes(length_bytes, "big") # נשמור את אורך ההודעה
+
+    # קריאת המידע
+    data = b"" # נגדיר את ה-buffer של בייטים שיאסוף את כל פיסות המידע שיגיעו
+    while len(data) < length: # כל עוד מספר הבייטים שיש ב-buffer קטן ממספר הבייטים של ההודעה
+        chunk = sock.recv(length - len(data)) # נקלוט את מספר הבייטים החסרים לנו בשביל שנדע שקראנו את כל ההודעה
+        if not chunk: # אם לא הצלחנו לקרוא בייטים לפני שסיימנו לקרוא את כל הבייטים של ההודעה, נחזיר דיקשנרי ריק
+            return {}
+        data += chunk # נוסיף ל-buffer את הבייטים שקראנו
+
+    return json.loads(data.decode(ENCODING)) # נחזיר את מה שקראנו ארוז כקובץ JSON
 
 # פונקציית טיפול בבקשות לקוח מסוג TCP
 def handle_tcp_client(client_sock, addr, catalog):

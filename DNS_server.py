@@ -170,7 +170,6 @@ def main():
     sock.bind((DNS_IP, DNS_PORT)) # נגדיר לו את ה-IP וה-PORT שאליו יפנה לקוח שירצה ליצור קשר
     sock.settimeout(1.0)
 
-
     print("=" * 30)
     print(f"DNS Server: {DNS_IP}:{DNS_PORT}")
     print(f"Upstream: Cloudflare DoH")
@@ -179,7 +178,6 @@ def main():
     print("\nWaiting for queries...\n")
 
     while True:
-
         cleanup_cache() # ננקה מה-Cache דומיינים שפג תוקפם
 
         try:
