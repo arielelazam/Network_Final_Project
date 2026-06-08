@@ -23,22 +23,27 @@ congestion control, DHCP & DNS servers.
 
 ## How to Run
 
-### 1. Start DHCP Server
+### 1. Start Prepare Media Engine
+```bash
+python prepare_media.py
+```
+
+### 2. Start DHCP Server
 ```bash
 python dhcp_server.py
 ```
 
-### 2. Start DNS Server (in another terminal)
+### 3. Start DNS Server (in another terminal)
 ```bash
 python dns_server.py
 ```
 
-### 3. Start Application Server (in another terminal)
+### 4. Start Application Server (in another terminal)
 ```bash
 python app_server.py
 ```
 
-### 4. Run Client (in another terminal)
+### 5. Run Client (in another terminal)
 ```bash
 python client.py
 ```
